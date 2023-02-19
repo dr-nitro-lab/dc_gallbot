@@ -1,0 +1,26 @@
+repeat: False
+use_cache : False
+
+board_id: jazz
+board_name: 재즈갤
+board_minor: False
+
+nick: 즉흥갤
+password: 1234567
+
+doc_write: True
+doc_title: 재즈 이야기는 즉흥갤로 ㄱ
+doc_contents: default_doc_contents.txt
+
+doc_watch: True
+doc_watch_keywords:
+  - 재즈
+  - 마일스
+  - 콜트레인
+
+comment_write: True
+comment_contents: default_comm_contents.txt
+
+mirror: True
+mirror_target_board_id: jazz
+mirror_target_board_minor: False
