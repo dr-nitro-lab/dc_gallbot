@@ -58,5 +58,5 @@ class GallbotConfig():
         return author
     
 if __name__ == "__main__":
-    config = GallbotConfig("conf/jazz.yaml")
+    config = GallbotConfig("conf/default.yaml")
     doc = config.doc_contents
