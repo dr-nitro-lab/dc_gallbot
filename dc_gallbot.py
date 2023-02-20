@@ -71,7 +71,7 @@ class Gallbot():
                         if(row.author == self.author):
                             print("(gallbot-generated doc)")
                         else:
-                            await self.get_comments(row.id)
+                            await self.get_comments(self.board_id, row.id)
                             if(self.comments.isAuthorExists(self.author)):
                                 print("already done")
                             else:
@@ -92,6 +92,7 @@ class Gallbot():
                                     .format(self.board_name, row.id, row.title)
                             url = "https://m.dcinside.com/board/{}/{}"\
                                   .format(self.board_id, row.id)
+                            author = row.author
                             print(title)
                             print(url)
                             print("done")
@@ -137,7 +138,8 @@ class Gallbot():
         author = nick+"("+ip_head+")"
         return author
     
-    async def get_board(self):
+    async def get_board(self, board_id=None):
+        board_id = self.board_id if board_id is None else board_id
         print("({}) get board ... ".format(self.board_id), end="")
         cols = ['id', 'author', 'time', 'title', 'comment_count', 'contents']
         df = pd.DataFrame([], columns=cols)
@@ -167,9 +169,9 @@ class Gallbot():
                              name=None, title=None, contents=None):
         board_id    = self.board_id    if board_id    is None else board_id
         board_minor = self.board_minor if board_minor is None else board_minor
-        name     = self.nick     if name     is None else name
-        title    = self.title    if title    is None else title
-        contents = self.contents if contents is None else contents
+        name     = self.nick         if name     is None else name
+        title    = self.doc_title    if title    is None else title
+        contents = self.doc_contents if contents is None else contents
         
         async with dc_api.API() as api:
             doc_id = await api.write_document(
@@ -198,16 +200,18 @@ class Gallbot():
                                 contents=contents)
         return com_id
     
-    async def get_comments(self, doc_id):
+    async def get_comments(self, board_id=None, doc_id=-1):
+        board_id    = self.board_id    if board_id    is None else board_id
         cols = ['id', 'author', 'time', 'contents', 'is_reply']
         df = pd.DataFrame([], columns=cols)
+        if doc_id < 0:
+            return df
         async with dc_api.API() as api:
             async for comm in api.comments(board_id=self.board_id, document_id=doc_id):
                 df_row = pd.DataFrame([[int(comm.id), comm.author, comm.time,
                                        comm.contents, comm.is_reply]],
                                       columns=cols)
                 df = pd.concat([df, df_row], ignore_index=True)
-                # print(comm.id, comm.author, comm.time, comm.contents, comm.is_reply)
         if (self.use_cache):
             df.to_csv('caches/'+self.board_id+".comments.csv", index=False)
         self.comments.set_comments(df)
