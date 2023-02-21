@@ -18,30 +18,28 @@ class Gallbot():
     """
     https://gall.dcinside.com/mgallery/board/view/?id=improvisation&no=1084
 
-    1. 주기적으로 지정된 게시판 읽기
-        1.1. 글 목록은 모바일 기준 1페이지 이내로 읽기 권고.
-        1.2. 읽기 후 가장 최근 작성된 글 번호 저장 후 파일에 기록
-
-    2. 지정된 갤러리에 모바일 기준 1페이지 이내 (8개)에
-       봇글이 없는 경우, 지정된 글 게시
-        2.0. 봇글 존재 여부는 지정된 작성자 존재 여부로 파악한다.
-             (봇 전용 닉 지정 권고)
-        2.1. 봇글의 타이틀과 작성자, 게시 내용, 비밀번호는 저장된 설정 파일을 이용.
-        2.2. 봇글이 없는 경우 게시 플래그 발생. 타이머 생성 후 종료 시 봇글 게시.
-
-    3. 지정된 갤러리에 지정된 키워드가 포함된 글이 올라올 시 지정된 댓글을 남김
-       (예: 포락갤에 문자열 '재즈'가 포함된 글이 게시될 경우
-            봇이 즉흥갤 링크 댓글 작성)
-        3.1. 해당 글에 봇 전용 닉의 댓글 존재 여부 확인 후
-             댓글이 없는 경우 즉시 댓글 작성.
-        3.2. 댓글의 작성자, 게시 내용, 비밀번호는 저장된 설정 파일을 이용.
-
-    4. 지정된 갤러리에 지정된 키워드가 올라오면 지정된 갤러리에
-       원글 출처와 함께 미러링
-       (예: 포락갤에 문자열 '재즈'가 포함된 글이 게시될 경우
-            봇이 즉흥갤에 해당글을 포락갤 링크와 함께 게시)
-        4.1. 봇글의 타이틀, 작성자, 게시 내용은 원글을 따름
-        4.2. 비밀번호는 저장된 설정 파일을 이용
+    1. [x] 주기적으로 지정된 게시판 읽기
+        1. [x] 글 목록은 모바일 기준 1페이지 이내로 읽기 권고.
+        2. [x] 읽기 후 가장 최근 작성된 글 번호 저장
+    2. [x] 지정된 갤러리에 모바일 기준 1페이지 이내 (8개)에 봇글이 없는 경우, 지정된 글 게시
+        1. [x] 봇글 존재 여부는 지정된 작성자 존재 여부로 파악한다.
+        * (봇 전용 닉 지정 권고)
+        2. [x] 봇글의 타이틀과 작성자, 게시 내용, 비밀번호는 저장된 설정 파일을 이용.
+        3. [x] 봇글이 없는 경우 봇글 게시.
+    3. [x] 지정된 갤러리에 지정된 키워드가 포함된 글이 올라올 시 지정된 댓글을 남김
+        * 예: 포락갤에 문자열 '재즈'가 포함된 글이 게시될 경우 봇이 즉흥갤 링크 댓글 작성
+        1. [x] 해당 글에 봇 전용 닉의 댓글 존재 여부 확인 후, 댓글이 없는 경우 즉시 댓글 작성.
+        2. [x] 댓글의 작성자, 게시 내용, 비밀번호는 저장된 설정 파일을 이용.
+        3. [x] 봇의 게시글은 제외
+    4. [ ] 지정된 갤러리에 지정된 키워드가 올라오면 지정된 갤러리에 원글 출처와 함께 미러링
+        * 예: 포락갤에 문자열 '재즈'가 포함된 글이 게시될 경우, 봇이 즉흥갤에 해당글을 포락갤 링크와 함께 게시
+        1. [ ] 봇글의 작성자, 게시 내용은 원글을 따름
+        2. [x] 봇글의 타이틀 앞에 출처 기록
+        * 예: (재즈갤|80090) 재즈피아노 입문자, 마이너 스케일 관련 질문
+        3. [x] 비밀번호는 저장된 설정 파일을 이용
+        4. [x] 읽기 후 가장 최근 작성된 글 번호 저장
+        5. [ ] https://github.com/dr-nitro-lab/dc_gallbot/issues/1 원문 추출 시 기본으로 생성되는 코드 제거
+        6. [ ] 봇의 게시글은 제외
     
     """
     def __init__(self, file_config):
@@ -49,22 +47,27 @@ class Gallbot():
 
     async def run(self):
         while(True):
-            print(strftime('%Y.%m.%d %H:%M:%S'))
+            # print(strftime('%Y.%m.%d %H:%M:%S'))
             await self.get_board()
             
             if(self.doc_write):
-                print("({}) doc ... ".format(self.board_id), end="")
+                print("({}) writing doc ... ".format(self.board_id), end="")
                 if(len(self.board.findAuthor(self.author)) == 0):
                     await self.write_document()
                     print("done")
                 else:
                     print("wait!")
-
+            
             if(self.doc_watch):
+                get_contents=True
+                last_id = self.board.df_board["id"].iloc[0]
+                await self.get_board(self.board_id, get_contents, self.doc_watch_last_id)
                 df_watch = self.board.findContentsNTitle(self.doc_watch_keywords)
                 # print(df_watch)
                 print("({}) watching keywords ... ".format(self.board_id))
                 for idx, row in df_watch.iterrows():
+                    if(row.id <= self.doc_watch_last_id):
+                        break
                     if(self.comment_write):
                         print("({}) ({}) comment ... "\
                               .format(self.board_id, row.id), end="")
@@ -75,7 +78,10 @@ class Gallbot():
                             if(self.comments.isAuthorExists(self.author)):
                                 print("already done")
                             else:
-                                await self.write_comment(row.id)
+                                try:
+                                    await self.write_comment(row.id)
+                                except:
+                                    self.comment_write = False
                                 print("done")
                     if(self.mirror):
                         print("({}) ({}) -> ({}) mirror ... "\
@@ -88,18 +94,25 @@ class Gallbot():
                             """
                             TODO: mirroring
                             """
-                            title = "({}|{}) {}"\
+                            title = "[{}|{}] {}"\
                                     .format(self.board_name, row.id, row.title)
                             url = "https://m.dcinside.com/board/{}/{}"\
                                   .format(self.board_id, row.id)
                             author = row.author
+                            contents = "출처: " + url
                             print(title)
-                            print(url)
-                            print("done")
+                            # print(url)
+                            await self.write_document(self.mirror_target_board_id,
+                                                      self.mirror_target_board_minor,
+                                                      author, title, contents)
+                        print("done")
+                self.doc_watch_last_id = last_id
+                print("({}) last watched doc id: {}".format(self.board_id,
+                                                            self.doc_watch_last_id))
             
             if(self.repeat == False):
                 break
-            await asyncio.sleep(5)
+            await asyncio.sleep(10)
 
     def get_config(self, file_config):
         self.cfg = GallbotConfig(file_config)
@@ -122,6 +135,7 @@ class Gallbot():
 
         self.doc_watch = self.cfg.doc_watch
         self.doc_watch_keywords = self.cfg.doc_watch_keywords
+        self.doc_watch_last_id = 0
 
         self.comments = Comments()
         self.comment_write = self.cfg.comment_write
@@ -138,18 +152,26 @@ class Gallbot():
         author = nick+"("+ip_head+")"
         return author
     
-    async def get_board(self, board_id=None):
+    async def get_board(self, board_id=None, get_contents=False, last_id=0):
         board_id = self.board_id if board_id is None else board_id
-        print("({}) get board ... ".format(self.board_id), end="")
+        print("({}) getting board data ... ".format(self.board_id), end="")
         cols = ['id', 'author', 'time', 'title', 'comment_count', 'contents']
         df = pd.DataFrame([], columns=cols)
         async with dc_api.API() as api:
             i_post = 0
             async for index in api.board(board_id=self.board_id):
-                doc = await self.get_document(int(index.id))
+                if(int(index.id) <= last_id):
+                    break
+                if(get_contents):
+                    print("({}|{}) getting doc ... ".format(self.board_id, index.id), end="")
+                    doc = await self.get_document(int(index.id))
+                    contents = doc.contents
+                    print("done")
+                else:
+                    contents = ""
                 df_row = pd.DataFrame([[int(index.id), index.author, index.time,
                                        index.title, int(index.comment_count),
-                                       doc.contents]],
+                                       contents]],
                                       columns=cols)
                 df = pd.concat([df, df_row], ignore_index=True)
                 i_post = i_post + 1

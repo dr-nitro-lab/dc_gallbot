@@ -7,12 +7,17 @@ Created on Sun Feb 19 22:40:24 2023
 
 import asyncio
 from dc_gallbot import Gallbot
+import yaml
 
 async def run(self):
     pass
 
 if __name__ == "__main__":
-    gallbot = Gallbot("conf/default.yaml")
+    with open('conf/gall_conf_list.yaml', 'r', encoding="utf-8") as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+        
+    list_gallbot = [Gallbot('conf/'+ conf) for conf in config['gall_conf_list']]
+    
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:  # 'RuntimeError: There is no current event loop...'
@@ -20,7 +25,8 @@ if __name__ == "__main__":
     
     if loop and loop.is_running():
         print('Async event loop already running. Adding coroutine to the event loop.')
-        tsk = loop.create_task(gallbot.run())
+        for gallbot in list_gallbot:
+            tsk = loop.create_task(gallbot.run())
         # ^-- https://docs.python.org/3/library/asyncio-task.html#task-object
         # Optionally, a callback function can be executed when the coroutine completes
         tsk.add_done_callback(
