@@ -48,7 +48,11 @@ class Gallbot():
     async def run(self):
         while(True):
             # print(strftime('%Y.%m.%d %H:%M:%S'))
-            await self.get_board()
+            try:
+                await self.get_board()
+            except:
+                await asyncio.sleep(10)
+                continue
             
             if(self.doc_write):
                 print("({}) writing doc ... ".format(self.board_id), end="")
@@ -60,8 +64,13 @@ class Gallbot():
             
             if(self.doc_watch):
                 get_contents=True
+                failed=False
                 last_id = self.board.df_board["id"].iloc[0]
-                await self.get_board(self.board_id, get_contents, self.doc_watch_last_id)
+                try:
+                    await self.get_board(self.board_id, get_contents, self.doc_watch_last_id)
+                except:
+                    await asyncio.sleep(10)
+                    continue
                 df_watch = self.board.findContentsNTitle(self.doc_watch_keywords)
                 # print(df_watch)
                 print("({}) watching keywords ... ".format(self.board_id))
@@ -81,7 +90,9 @@ class Gallbot():
                                 try:
                                     await self.write_comment(row.id)
                                 except:
-                                    self.comment_write = False
+                                    print("failed")
+                                    self.comment_write=False
+                                    failed=True
                                 print("done")
                     if(self.mirror):
                         print("({}) ({}) -> ({}) mirror ... "\
@@ -94,18 +105,25 @@ class Gallbot():
                             """
                             TODO: mirroring
                             """
-                            title = "[{}|{}] {}"\
-                                    .format(self.board_name, row.id, row.title)
+                            title = "[{}] {}"\
+                                    .format(self.board_name, row.title)
                             url = "https://m.dcinside.com/board/{}/{}"\
                                   .format(self.board_id, row.id)
                             author = row.author
                             contents = "출처: " + url
                             print(title)
                             # print(url)
-                            await self.write_document(self.mirror_target_board_id,
-                                                      self.mirror_target_board_minor,
-                                                      author, title, contents)
+                            try:
+                                await self.write_document(\
+                                    self.mirror_target_board_id,
+                                    self.mirror_target_board_minor,
+                                    author, title, contents)
+                            except:
+                                print("failed")
+                                failed=True
                         print("done")
+                # if(not failed):
+                #     self.doc_watch_last_id = last_id
                 self.doc_watch_last_id = last_id
                 print("({}) last watched doc id: {}".format(self.board_id,
                                                             self.doc_watch_last_id))
