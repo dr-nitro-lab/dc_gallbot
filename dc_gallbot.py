@@ -8,8 +8,6 @@ Created on Wed Jan 26 03:53:10 2022
 from pathlib import Path
 import sys
 
-from requests import get
-
 API_REPO_DIR = Path(__file__).resolve().parents[1] / "api_repo"
 if API_REPO_DIR.is_dir():
     sys.path.insert(0, str(API_REPO_DIR))
@@ -17,7 +15,7 @@ if API_REPO_DIR.is_dir():
 import dc_api
 import asyncio
 import pandas as pd
-from dc_gallbot_cfg import GallbotConfig
+from dc_gallbot_cfg import GallbotConfig, get_public_ip
 from dc_board import Board
 from dc_comments import Comments
 from time import strftime
@@ -222,7 +220,7 @@ class Gallbot():
         return False
 
     def get_author(self, nick):
-        ip = get('https://api.my-ip.io/ip').text
+        ip = get_public_ip()
         ip_head = '.'.join(ip.split('.')[0:2])
         author = nick+"("+ip_head+")"
         return author

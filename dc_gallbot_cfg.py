@@ -6,8 +6,39 @@ Created on Sun Feb 19 17:29:40 2023
 """
 
 import yaml
-from requests import get
+from requests import RequestException, get
 from pathlib import PurePath
+
+PUBLIC_IP_URLS = [
+    "https://api.ip.pe.kr/json/",
+    "https://api.my-ip.io/ip",
+    "https://api.myip.com",
+    "https://api.ipify.org",
+]
+
+
+def parse_public_ip_response(response):
+    content_type = response.headers.get("content-type", "")
+    if "json" in content_type:
+        data = response.json()
+        if isinstance(data, dict) and data.get("ip"):
+            return str(data["ip"]).strip()
+    return response.text.strip()
+
+
+def get_public_ip(urls=PUBLIC_IP_URLS, timeout=3):
+    errors = []
+    for url in urls:
+        try:
+            response = get(url, timeout=timeout)
+            response.raise_for_status()
+            ip = parse_public_ip_response(response)
+            if ip:
+                return ip
+        except (RequestException, ValueError, KeyError) as exc:
+            errors.append("{}: {}".format(url, exc))
+    raise RuntimeError("Could not get public IP from configured providers: {}".format("; ".join(errors)))
+
 
 class GallbotConfig():
     def __init__(self, file_config):
@@ -52,7 +83,7 @@ class GallbotConfig():
         return
     
     def get_author(self, nick):
-        ip = get('https://api.my-ip.io/ip').text
+        ip = get_public_ip()
         ip_head = '.'.join(ip.split('.')[0:2])
         author = nick+"("+ip_head+")"
         return author
