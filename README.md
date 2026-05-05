@@ -26,9 +26,20 @@
    6. [ ] 봇의 게시글은 제외
 
 ## dependency
-[github repo]: https://github.com/eunchuldev/dcinside-python3-api
+[dc_api fork]: https://github.com/dr-nitro-lab/dcinside-python3-api
  * dc_api
-   * [github repo]
-   * 6675fe5 (May 5, 2022) 버전 사용 (PyPI에 업데이트 안됨)
-   * github repo에서 직접 clone 필요.
-   * PyPI를 통해 설치한 다음 dc_api.py만 업데이트 하는 쪽을 추천.
+   * [dc_api fork]
+   * 이 워크스페이스에서는 sibling repo인 `../api_repo/dc_api.py`를 우선 import한다.
+   * PyPI 패키지는 현재 복구된 읽기/쓰기 수정사항을 포함하지 않으므로 사용하지 않는다.
+   * fork의 `master` 브랜치가 현재 기준 버전이다.
+
+## restore/debug commands
+
+```bash
+# 전체 설정을 한 번만 읽고 쓰기 없이 동작 확인
+../scripts/smoke-bot-dry-run.sh
+```
+
+Live write tests should use local workspace scripts or private operator notes,
+not public README examples. Use `--dry-run` first and only run live posting
+commands against galleries you operate.
