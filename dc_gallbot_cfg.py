@@ -6,6 +6,7 @@ Created on Sun Feb 19 17:29:40 2023
 """
 
 import yaml
+from ipaddress import IPv4Address, ip_address
 from requests import RequestException, get
 from pathlib import PurePath
 
@@ -18,12 +19,20 @@ PUBLIC_IP_URLS = [
 
 
 def parse_public_ip_response(response):
+    text = response.text.strip()
     content_type = response.headers.get("content-type", "")
-    if "json" in content_type:
+    if "json" in content_type or text.startswith("{"):
         data = response.json()
         if isinstance(data, dict) and data.get("ip"):
             return str(data["ip"]).strip()
-    return response.text.strip()
+    return text
+
+
+def validate_public_ip(value):
+    parsed = ip_address(value)
+    if not isinstance(parsed, IPv4Address):
+        raise ValueError("Expected an IPv4 address, got {}".format(value))
+    return str(parsed)
 
 
 def get_public_ip(urls=PUBLIC_IP_URLS, timeout=3):
@@ -32,7 +41,7 @@ def get_public_ip(urls=PUBLIC_IP_URLS, timeout=3):
         try:
             response = get(url, timeout=timeout)
             response.raise_for_status()
-            ip = parse_public_ip_response(response)
+            ip = validate_public_ip(parse_public_ip_response(response))
             if ip:
                 return ip
         except (RequestException, ValueError, KeyError) as exc:
