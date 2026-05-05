@@ -5,7 +5,15 @@ Created on Wed Jan 26 03:53:10 2022
 @author: NitroLab
 """
 
+from pathlib import Path
+import sys
+
 from requests import get
+
+API_REPO_DIR = Path(__file__).resolve().parents[1] / "api_repo"
+if API_REPO_DIR.is_dir():
+    sys.path.insert(0, str(API_REPO_DIR))
+
 import dc_api
 import asyncio
 import pandas as pd
@@ -42,23 +50,44 @@ class Gallbot():
         6. [ ] 봇의 게시글은 제외
     
     """
-    def __init__(self, file_config):
+    def __init__(self, file_config, dry_run=False):
+        self.file_config = file_config
+        self.dry_run = dry_run
+        self.doc_write_use_gallery_nickname = False
+        self.doc_write_html_memo = False
+        self.doc_write_backend = "mobile"
+        self.doc_write_pc_use_html = False
         self.get_config(file_config)
 
-    async def run(self):
+    async def run(self, max_cycles=None, interval_seconds=10):
+        cycle = 0
         while(True):
+            cycle += 1
             # print(strftime('%Y.%m.%d %H:%M:%S'))
             try:
                 await self.get_board()
-            except:
-                await asyncio.sleep(10)
+            except Exception as exc:
+                print("({}) getting board data failed: {!r}".format(self.board_id, exc))
+                if max_cycles is not None:
+                    raise
+                await asyncio.sleep(interval_seconds)
                 continue
             
             if(self.doc_write):
                 print("({}) writing doc ... ".format(self.board_id), end="")
-                if(len(self.board.findAuthor(self.author)) == 0):
-                    await self.write_document()
-                    print("done")
+                if(not self.has_doc_write_post()):
+                    if self.dry_run:
+                        write_name = self.get_doc_write_name()
+                        write_contents = self.get_doc_write_contents()
+                        print("[dry-run] would write doc backend={} name={!r} title={!r} contents_len={}".format(
+                            self.doc_write_backend,
+                            write_name,
+                            self.doc_title,
+                            len(write_contents),
+                        ))
+                    else:
+                        doc_id = await self.write_document()
+                        print("done doc_id={}".format(doc_id))
                 else:
                     print("wait!")
             
@@ -68,12 +97,15 @@ class Gallbot():
                 last_id = self.board.df_board["id"].iloc[0]
                 try:
                     await self.get_board(self.board_id, get_contents, self.doc_watch_last_id)
-                except:
-                    await asyncio.sleep(10)
+                except Exception as exc:
+                    print("({}) watching keywords failed: {!r}".format(self.board_id, exc))
+                    if max_cycles is not None:
+                        raise
+                    await asyncio.sleep(interval_seconds)
                     continue
                 df_watch = self.board.findContentsNTitle(self.doc_watch_keywords)
                 # print(df_watch)
-                print("({}) watching keywords ... ".format(self.board_id))
+                print("({}) watching keywords ... matched={}".format(self.board_id, len(df_watch)))
                 for idx, row in df_watch.iterrows():
                     if(row.id <= self.doc_watch_last_id):
                         break
@@ -87,13 +119,16 @@ class Gallbot():
                             if(self.comments.isAuthorExists(self.author)):
                                 print("already done")
                             else:
-                                try:
-                                    await self.write_comment(row.id)
-                                except:
-                                    print("failed")
-                                    self.comment_write=False
-                                    failed=True
-                                print("done")
+                                if self.dry_run:
+                                    print("[dry-run] would write comment")
+                                else:
+                                    try:
+                                        await self.write_comment(row.id)
+                                    except Exception as exc:
+                                        print("failed: {!r}".format(exc))
+                                        self.comment_write=False
+                                        failed=True
+                                    print("done")
                     if(self.mirror):
                         print("({}) ({}) -> ({}) mirror ... "\
                               .format(self.board_id, row.id,
@@ -113,14 +148,17 @@ class Gallbot():
                             contents = "출처: " + url
                             print(title)
                             # print(url)
-                            try:
-                                await self.write_document(\
-                                    self.mirror_target_board_id,
-                                    self.mirror_target_board_minor,
-                                    author, title, contents)
-                            except:
-                                print("failed")
-                                failed=True
+                            if self.dry_run:
+                                print("[dry-run] would mirror author={!r} title={!r} contents={!r}".format(author, title, contents))
+                            else:
+                                try:
+                                    await self.write_document(\
+                                        self.mirror_target_board_id,
+                                        self.mirror_target_board_minor,
+                                        author, title, contents)
+                                except Exception as exc:
+                                    print("failed: {!r}".format(exc))
+                                    failed=True
                         print("done")
                 # if(not failed):
                 #     self.doc_watch_last_id = last_id
@@ -128,9 +166,11 @@ class Gallbot():
                 print("({}) last watched doc id: {}".format(self.board_id,
                                                             self.doc_watch_last_id))
             
+            if max_cycles is not None and cycle >= max_cycles:
+                break
             if(self.repeat == False):
                 break
-            await asyncio.sleep(10)
+            await asyncio.sleep(interval_seconds)
 
     def get_config(self, file_config):
         self.cfg = GallbotConfig(file_config)
@@ -164,6 +204,23 @@ class Gallbot():
         self.mirror_target_board_minor = self.cfg.mirror_target_board_minor
         return
 
+    def get_doc_write_name(self):
+        if self.doc_write_use_gallery_nickname:
+            return ""
+        return self.nick
+
+    def get_doc_write_contents(self):
+        if not self.doc_write_html_memo:
+            return self.doc_contents
+        return self.doc_contents.replace('""', '"').strip().replace("\r\n", "\n").replace("\r", "\n").replace("\n", "<br>")
+
+    def has_doc_write_post(self):
+        if len(self.board.findAuthor(self.author)) > 0:
+            return True
+        if 'title' in self.board.df_board:
+            return len(self.board.df_board[self.board.df_board['title'] == self.doc_title]) > 0
+        return False
+
     def get_author(self, nick):
         ip = get('https://api.my-ip.io/ip').text
         ip_head = '.'.join(ip.split('.')[0:2])
@@ -172,33 +229,36 @@ class Gallbot():
     
     async def get_board(self, board_id=None, get_contents=False, last_id=0):
         board_id = self.board_id if board_id is None else board_id
-        print("({}) getting board data ... ".format(self.board_id), end="")
+        print("({}) getting board data ... ".format(board_id), end="")
         cols = ['id', 'author', 'time', 'title', 'comment_count', 'contents']
-        df = pd.DataFrame([], columns=cols)
+        rows = []
         async with dc_api.API() as api:
             i_post = 0
-            async for index in api.board(board_id=self.board_id):
+            async for index in api.board(board_id=board_id):
                 if(int(index.id) <= last_id):
                     break
                 if(get_contents):
-                    print("({}|{}) getting doc ... ".format(self.board_id, index.id), end="")
-                    doc = await self.get_document(int(index.id))
+                    print("({}|{}) getting doc ... ".format(board_id, index.id), end="")
+                    doc = await self.get_document(int(index.id), board_id)
+                    if doc is None:
+                        print("skipped")
+                        continue
+                    index.author = doc.author
                     contents = doc.contents
                     print("done")
                 else:
                     contents = ""
-                df_row = pd.DataFrame([[int(index.id), index.author, index.time,
-                                       index.title, int(index.comment_count),
-                                       contents]],
-                                      columns=cols)
-                df = pd.concat([df, df_row], ignore_index=True)
+                rows.append([int(index.id), index.author, index.time,
+                             index.title, int(index.comment_count), contents])
                 i_post = i_post + 1
                 if(i_post == 8):
+                    df = pd.DataFrame(rows, columns=cols)
                     if (self.use_cache):
-                        df.to_csv('caches/' + self.board_id+".csv", index=False)
+                        df.to_csv('caches/' + board_id+".csv", index=False)
                     self.board.set_board(df)
                     print('done')
                     return df
+        df = pd.DataFrame(rows, columns=cols)
         self.board.set_board(df)
         print('done')
         return df
@@ -209,23 +269,33 @@ class Gallbot():
                              name=None, title=None, contents=None):
         board_id    = self.board_id    if board_id    is None else board_id
         board_minor = self.board_minor if board_minor is None else board_minor
-        name     = self.nick         if name     is None else name
+        name     = self.get_doc_write_name() if name is None else name
         title    = self.doc_title    if title    is None else title
-        contents = self.doc_contents if contents is None else contents
+        contents = self.get_doc_write_contents() if contents is None else contents
         
         async with dc_api.API() as api:
-            doc_id = await api.write_document(
-                               board_id=board_id,
-                               name=name,
-                               password=self.password, 
-                               title=title,
-                               contents=contents,
-                               is_minor=board_minor)
+            if self.doc_write_backend == "pc":
+                doc_id = await api.write_document_pc(
+                                   board_id=board_id,
+                                   name=name,
+                                   password=self.password,
+                                   title=title,
+                                   contents=contents,
+                                   use_html=self.doc_write_pc_use_html)
+            else:
+                doc_id = await api.write_document(
+                                   board_id=board_id,
+                                   name=name,
+                                   password=self.password,
+                                   title=title,
+                                   contents=contents,
+                                   is_minor=board_minor)
         return doc_id
 
-    async def get_document(self, doc_id):
+    async def get_document(self, doc_id, board_id=None):
+        board_id = self.board_id if board_id is None else board_id
         async with dc_api.API() as api:
-            doc = await api.document(board_id=self.board_id, document_id=doc_id)
+            doc = await api.document(board_id=board_id, document_id=doc_id)
         return doc
     
     async def write_comment(self, doc_id,
@@ -243,17 +313,16 @@ class Gallbot():
     async def get_comments(self, board_id=None, doc_id=-1):
         board_id    = self.board_id    if board_id    is None else board_id
         cols = ['id', 'author', 'time', 'contents', 'is_reply']
-        df = pd.DataFrame([], columns=cols)
+        rows = []
         if doc_id < 0:
-            return df
+            return pd.DataFrame(rows, columns=cols)
         async with dc_api.API() as api:
-            async for comm in api.comments(board_id=self.board_id, document_id=doc_id):
-                df_row = pd.DataFrame([[int(comm.id), comm.author, comm.time,
-                                       comm.contents, comm.is_reply]],
-                                      columns=cols)
-                df = pd.concat([df, df_row], ignore_index=True)
+            async for comm in api.comments(board_id=board_id, document_id=doc_id):
+                rows.append([int(comm.id), comm.author, comm.time,
+                             comm.contents, comm.is_reply])
+        df = pd.DataFrame(rows, columns=cols)
         if (self.use_cache):
-            df.to_csv('caches/'+self.board_id+".comments.csv", index=False)
+            df.to_csv('caches/'+board_id+".comments.csv", index=False)
         self.comments.set_comments(df)
         return df
 
