@@ -270,10 +270,22 @@ class Gallbot():
             self.board_id,
             num=max(1, self.mirror_cleanup_scan_pages) * 8,
         )
+        if not visible_source_ids:
+            return
+        min_visible_source_id = min(visible_source_ids)
+        max_visible_source_id = max(visible_source_ids)
         for row in rows:
             source_doc_id = int(row["source_doc_id"])
             if source_doc_id in visible_source_ids:
                 self.mirror_cache.mark_seen(row["id"])
+                continue
+            if source_doc_id < min_visible_source_id:
+                print("({}) mirror source out of scanned range source_doc_id={} scanned={}..{}".format(
+                    self.board_id,
+                    source_doc_id,
+                    min_visible_source_id,
+                    max_visible_source_id,
+                ))
                 continue
             missing_count = self.mirror_cache.mark_missing(row["id"])
             print("({}) mirror source missing source_doc_id={} mirror_doc_id={} missing_count={}".format(
