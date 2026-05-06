@@ -18,6 +18,7 @@ import pandas as pd
 from dc_gallbot_cfg import GallbotConfig, get_public_ip
 from dc_board import Board
 from dc_comments import Comments
+from mirror_cache import MirrorCache
 from time import strftime
 
 class Gallbot():
@@ -55,6 +56,7 @@ class Gallbot():
         self.doc_write_html_memo = False
         self.doc_write_backend = "mobile"
         self.doc_write_pc_use_html = False
+        self.mirror_cache = None
         self.get_config(file_config)
 
     async def run(self, max_cycles=None, interval_seconds=10):
@@ -134,6 +136,8 @@ class Gallbot():
 
                         if(row.author == self.author):
                             print("(gallbot-generated doc)")
+                        elif self.has_mirrored_source(row.id):
+                            print("already mirrored")
                         else:
                             """
                             TODO: mirroring
@@ -150,10 +154,11 @@ class Gallbot():
                                 print("[dry-run] would mirror author={!r} title={!r} contents={!r}".format(author, title, contents))
                             else:
                                 try:
-                                    await self.write_document(\
+                                    mirror_doc_id = await self.write_document(
                                         self.mirror_target_board_id,
                                         self.mirror_target_board_minor,
                                         author, title, contents)
+                                    self.record_mirror(row.id, row.title, mirror_doc_id, title)
                                 except Exception as exc:
                                     print("failed: {!r}".format(exc))
                                     failed=True
@@ -163,6 +168,8 @@ class Gallbot():
                 self.doc_watch_last_id = last_id
                 print("({}) last watched doc id: {}".format(self.board_id,
                                                             self.doc_watch_last_id))
+            if self.mirror_cleanup:
+                await self.cleanup_mirrors()
             
             if max_cycles is not None and cycle >= max_cycles:
                 break
@@ -200,6 +207,14 @@ class Gallbot():
         self.mirror = self.cfg.mirror
         self.mirror_target_board_id = self.cfg.mirror_target_board_id
         self.mirror_target_board_minor = self.cfg.mirror_target_board_minor
+        self.mirror_cache_file = self.cfg.mirror_cache_file
+        self.mirror_cleanup = self.cfg.mirror_cleanup
+        self.mirror_cleanup_delete = self.cfg.mirror_cleanup_delete
+        self.mirror_cleanup_recent = int(self.cfg.mirror_cleanup_recent)
+        self.mirror_cleanup_missing_cycles = int(self.cfg.mirror_cleanup_missing_cycles)
+        self.mirror_cleanup_scan_pages = int(self.cfg.mirror_cleanup_scan_pages)
+        if self.mirror or self.mirror_cleanup:
+            self.mirror_cache = MirrorCache(self.mirror_cache_file)
         return
 
     def get_doc_write_name(self):
@@ -218,6 +233,77 @@ class Gallbot():
         if 'title' in self.board.df_board:
             return len(self.board.df_board[self.board.df_board['title'] == self.doc_title]) > 0
         return False
+
+    def has_mirrored_source(self, source_doc_id):
+        if self.mirror_cache is None:
+            return False
+        return self.mirror_cache.has_active_source(
+            self.board_id,
+            int(source_doc_id),
+            self.mirror_target_board_id,
+        )
+
+    def record_mirror(self, source_doc_id, source_title, mirror_doc_id, mirror_title):
+        if self.mirror_cache is None or mirror_doc_id is None:
+            return
+        self.mirror_cache.record_mirror(
+            self.board_id,
+            int(source_doc_id),
+            source_title,
+            self.mirror_target_board_id,
+            int(mirror_doc_id),
+            mirror_title,
+            self.mirror_target_board_minor,
+            self.password,
+        )
+
+    async def cleanup_mirrors(self):
+        if self.mirror_cache is None:
+            return
+        rows = self.mirror_cache.recent_active_by_source(
+            self.board_id,
+            self.mirror_cleanup_recent,
+        )
+        if not rows:
+            return
+        visible_source_ids = await self.list_board_document_ids(
+            self.board_id,
+            num=max(1, self.mirror_cleanup_scan_pages) * 8,
+        )
+        for row in rows:
+            source_doc_id = int(row["source_doc_id"])
+            if source_doc_id in visible_source_ids:
+                self.mirror_cache.mark_seen(row["id"])
+                continue
+            missing_count = self.mirror_cache.mark_missing(row["id"])
+            print("({}) mirror source missing source_doc_id={} mirror_doc_id={} missing_count={}".format(
+                self.board_id,
+                source_doc_id,
+                row["target_doc_id"],
+                missing_count,
+            ))
+            if missing_count < self.mirror_cleanup_missing_cycles:
+                continue
+            if self.dry_run or not self.mirror_cleanup_delete:
+                print("[dry-run] would remove mirror doc_id={} from {}".format(
+                    row["target_doc_id"],
+                    row["target_board_id"],
+                ))
+                continue
+            try:
+                await self.remove_document(
+                    row["target_board_id"],
+                    int(row["target_doc_id"]),
+                    bool(row["target_is_minor"]),
+                    row["password"],
+                )
+                self.mirror_cache.mark_removed(row["id"])
+                print("removed mirror doc_id={} from {}".format(
+                    row["target_doc_id"],
+                    row["target_board_id"],
+                ))
+            except Exception as exc:
+                print("remove mirror failed doc_id={}: {!r}".format(row["target_doc_id"], exc))
 
     def get_author(self, nick):
         ip = get_public_ip()
@@ -261,6 +347,13 @@ class Gallbot():
         print('done')
         return df
 
+    async def list_board_document_ids(self, board_id, num):
+        ids = set()
+        async with dc_api.API() as api:
+            async for index in api.board(board_id=board_id, num=num):
+                ids.add(int(index.id))
+        return ids
+
 
     async def write_document(self,
                              board_id=None, board_minor=None,
@@ -289,6 +382,16 @@ class Gallbot():
                                    contents=contents,
                                    is_minor=board_minor)
         return doc_id
+
+    async def remove_document(self, board_id, document_id, is_minor=False, password=None):
+        password = self.password if password is None else password
+        async with dc_api.API() as api:
+            return await api.remove_document(
+                board_id=board_id,
+                document_id=document_id,
+                password=password,
+                is_minor=is_minor,
+            )
 
     async def get_document(self, doc_id, board_id=None):
         board_id = self.board_id if board_id is None else board_id

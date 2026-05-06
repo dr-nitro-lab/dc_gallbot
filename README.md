@@ -43,3 +43,25 @@
 Live write tests should use local workspace scripts or private operator notes,
 not public README examples. Use `--dry-run` first and only run live posting
 commands against galleries you operate.
+
+## mirror cache
+
+Mirrored posts are tracked in a local sqlite cache so the bot can avoid
+duplicating mirrors and can later clean up mirrors whose source post has
+disappeared from the source board list. The cache file defaults to
+`caches/mirror_cache.sqlite`, which should remain local runtime state.
+
+Optional config keys:
+
+```yaml
+mirror_cache_file: caches/mirror_cache.sqlite
+mirror_cleanup: false
+mirror_cleanup_delete: false
+mirror_cleanup_recent: 10
+mirror_cleanup_missing_cycles: 2
+mirror_cleanup_scan_pages: 3
+```
+
+Cleanup only reads board lists and does not fetch source documents. Actual
+mirror deletion requires `mirror_cleanup_delete: true`; otherwise cleanup logs
+what it would remove.

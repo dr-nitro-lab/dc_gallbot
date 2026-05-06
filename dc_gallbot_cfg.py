@@ -88,6 +88,12 @@ class GallbotConfig():
         self.mirror = config['mirror']
         self.mirror_target_board_id = config['mirror_target_board_id']
         self.mirror_target_board_minor = config['mirror_target_board_minor']
+        self.mirror_cache_file = config.get('mirror_cache_file', 'caches/mirror_cache.sqlite')
+        self.mirror_cleanup = config.get('mirror_cleanup', False)
+        self.mirror_cleanup_delete = config.get('mirror_cleanup_delete', False)
+        self.mirror_cleanup_recent = config.get('mirror_cleanup_recent', 10)
+        self.mirror_cleanup_missing_cycles = config.get('mirror_cleanup_missing_cycles', 2)
+        self.mirror_cleanup_scan_pages = config.get('mirror_cleanup_scan_pages', 3)
 
         return
     
