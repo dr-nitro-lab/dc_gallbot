@@ -133,23 +133,23 @@ class Gallbot():
                         print("({}) ({}) -> ({}) mirror ... "\
                               .format(self.board_id, row.id,
                                       self.mirror_target_board_id), end="")
+                        title = "[{}] {}".format(self.board_name, row.title)
+                        url = "https://m.dcinside.com/board/{}/{}".format(self.board_id, row.id)
+                        author = row.author
+                        contents = "출처: " + url
 
                         if(row.author == self.author):
                             print("(gallbot-generated doc)")
                         elif self.has_mirrored_source(row.id):
                             print("already mirrored")
                         else:
-                            """
-                            TODO: mirroring
-                            """
-                            title = "[{}] {}"\
-                                    .format(self.board_name, row.title)
-                            url = "https://m.dcinside.com/board/{}/{}"\
-                                  .format(self.board_id, row.id)
-                            author = row.author
-                            contents = "출처: " + url
-                            print(title)
-                            # print(url)
+                            existing_mirror_doc_id = await self.find_existing_mirror_document_id(title)
+                            if existing_mirror_doc_id is not None:
+                                if not self.dry_run:
+                                    self.record_mirror(row.id, row.title, existing_mirror_doc_id, title)
+                                print("already mirrored doc_id={}".format(existing_mirror_doc_id))
+                                print("done")
+                                continue
                             if self.dry_run:
                                 print("[dry-run] would mirror author={!r} title={!r} contents={!r}".format(author, title, contents))
                             else:
@@ -256,6 +256,13 @@ class Gallbot():
             self.mirror_target_board_minor,
             self.password,
         )
+
+    async def find_existing_mirror_document_id(self, title, num=80):
+        async with dc_api.API() as api:
+            async for index in api.board(board_id=self.mirror_target_board_id, num=num):
+                if index.title == title:
+                    return int(index.id)
+        return None
 
     async def cleanup_mirrors(self):
         if self.mirror_cache is None:
