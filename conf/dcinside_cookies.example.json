@@ -1,0 +1,16 @@
+{
+  "cookies": [
+    {
+      "domain": ".dcinside.com",
+      "path": "/",
+      "name": "PHPSESSID",
+      "value": "REPLACE_WITH_EXPORTED_COOKIE_VALUE"
+    },
+    {
+      "domain": ".dcinside.com",
+      "path": "/",
+      "name": "ci_c",
+      "value": "REPLACE_WITH_EXPORTED_COOKIE_VALUE"
+    }
+  ]
+}

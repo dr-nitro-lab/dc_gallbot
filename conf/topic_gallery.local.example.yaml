@@ -1,0 +1,27 @@
+# Topic gallery example.
+# This is the gallery where source-gallery topic posts are gathered.
+# In this repository's example, jazz is the topic gallery.
+
+repeat: True
+use_cache : False
+
+board_id: jazz
+board_name: 재즈갤
+board_minor: False
+
+nick: 즉흥갤
+password: ""
+
+doc_write: False
+doc_title: ""
+doc_contents: default_doc_contents.txt
+
+doc_watch: False
+doc_watch_keywords: []
+
+comment_write: False
+comment_contents: default_comm_contents.txt
+
+mirror: False
+mirror_target_board_id:
+mirror_target_board_minor: False

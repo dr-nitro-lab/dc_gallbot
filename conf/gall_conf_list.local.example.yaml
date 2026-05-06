@@ -1,0 +1,6 @@
+gall_conf_list:
+  - topic_gallery.local.yaml
+  - source_postrock.local.yaml
+  - source_music.local.yaml
+  - source_lp.local.yaml
+  - managed_minor_gallery.local.yaml

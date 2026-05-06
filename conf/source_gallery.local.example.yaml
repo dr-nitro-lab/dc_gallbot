@@ -1,0 +1,80 @@
+# Source gallery example.
+# Copy this file once per source gallery and change board_id/board_name/keywords.
+# In this repository's operating pattern, several source galleries can mirror
+# matching topic posts into the main topic gallery, not into the managed refuge.
+
+# repeat: True keeps polling. False runs one cycle and exits.
+repeat: True
+# use_cache: True writes local CSV snapshots under caches/. False skips CSV cache.
+use_cache : False
+
+# board_id: DCInside gallery id from the URL, for example postrockgallery.
+board_id: postrockgallery
+# board_name: display label used in mirror titles.
+board_name: 포락갤
+# board_minor: True for minor galleries, False for major galleries.
+board_minor: False
+
+# nick/password: nonmember posting identity used only when writing is enabled.
+nick: 즉흥갤
+password: ""
+
+# doc_write: True keeps a guide post visible in this gallery.
+doc_write: False
+doc_title: ""
+# doc_contents: text/html file under conf/.
+doc_contents: default_doc_contents.txt
+
+# doc_watch: True scans recent article titles and bodies for doc_watch_keywords.
+doc_watch: True
+# doc_watch_keywords: list of strings. Any match can trigger comment/mirror flow.
+doc_watch_keywords:
+  - 재즈
+  - 마일스
+  - 콜트레인
+
+# comment_write: True writes comment_contents on matched posts.
+# Enable only for source galleries whose managers explicitly agreed.
+comment_write: False
+comment_contents: default_comm_contents.txt
+
+# mirror: True creates/updates a mirror post in mirror_target_board_id.
+mirror: False
+# mirror_target_board_id: topic gallery where matching source posts are gathered.
+mirror_target_board_id: jazz
+mirror_target_board_minor: False
+
+# mirror_cache_file: sqlite file for duplicate prevention and cleanup state.
+mirror_cache_file: caches/mirror_cache.sqlite
+# mirror_cleanup: True checks whether already mirrored source/target posts disappeared.
+mirror_cleanup: False
+# mirror_cleanup_delete: True deletes target mirror posts when source disappears.
+# Keep False until the cleanup behavior is verified.
+mirror_cleanup_delete: False
+# mirror_cleanup_recent: number of recent mirror records to inspect per cycle.
+mirror_cleanup_recent: 10
+# mirror_cleanup_missing_cycles: cycles before a missing source is treated as removed.
+mirror_cleanup_missing_cycles: 2
+# mirror_cleanup_scan_pages: source board pages to scan, roughly pages * 8 rows.
+mirror_cleanup_scan_pages: 3
+# mirror_cleanup_target_scan_pages: target board pages to scan. Defaults to source scan pages.
+mirror_cleanup_target_scan_pages: 3
+# mirror_sync_update: True detects source title changes for mirror posts.
+mirror_sync_update: False
+# mirror_sync_update_apply: True applies title updates to target mirror posts.
+mirror_sync_update_apply: False
+
+# mirror_relevance_monitor: True stores rule-based relevance score events.
+mirror_relevance_monitor: False
+# mirror_relevance_filter: True skips mirrors below configured pass/review scores.
+mirror_relevance_filter: False
+# Scores >= pass_score pass, scores <= review_score are review/skip candidates.
+mirror_relevance_pass_score: 7
+mirror_relevance_review_score: 1
+# Multipliers applied to title/body keyword hits.
+mirror_relevance_title_multiplier: 2
+mirror_relevance_contents_multiplier: 1
+# Optional dictionaries/lists for relevance tuning. Keep empty to use watch keywords only.
+mirror_relevance_positive_keywords: {}
+mirror_relevance_negative_keywords: {}
+mirror_relevance_context_keywords: {}

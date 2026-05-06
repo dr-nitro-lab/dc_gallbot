@@ -1,0 +1,56 @@
+# Managed minor gallery example.
+# Copy this file to a local yaml and change board_id/board_name.
+# In this repository's example, improvisation is the operator-managed refuge.
+
+# repeat: True keeps polling. False runs one cycle and exits.
+repeat: True
+# use_cache: True writes local CSV snapshots under caches/. False skips CSV cache.
+use_cache : False
+
+# board_id: managed minor gallery id from the URL.
+board_id: improvisation
+board_name: 즉흥연주갤
+# board_minor should normally be True here.
+board_minor: True
+
+# nick/password are unused while doc_write/comment_write are False.
+nick: 즉흥갤
+password: ""
+
+# doc_write is normally False for a managed refuge gallery to avoid bot-post pollution.
+doc_write: False
+doc_title: ""
+doc_contents: default_doc_contents.txt
+
+# doc_watch/comment_write/mirror are normally False here.
+# Moderation is handled by moderation_* options below.
+doc_watch: False
+doc_watch_keywords: []
+
+comment_write: False
+comment_contents: default_comm_contents.txt
+
+mirror: False
+mirror_target_board_id:
+mirror_target_board_minor: False
+
+# moderation_monitor: True scans recent articles for moderation rules.
+moderation_monitor: True
+# moderation_scan_comments: True also fetches comments for scanned articles.
+moderation_scan_comments: True
+moderation_cache_file: caches/moderation_candidates.sqlite
+# moderation_rules_file: local YAML file containing moderation_rules.
+moderation_rules_file: moderation_rules.local.yaml
+moderation_rules: []
+
+# moderation_auto_action: True allows eligible rules to submit manager actions.
+# Keep False until cookie/session and rules are tested with --dry-run.
+moderation_auto_action: False
+moderation_auto_action_cookie_file: conf/dcinside_cookies.json
+# moderation_auto_action_allow_galleries: allowlist required for auto actions.
+moderation_auto_action_allow_galleries:
+  - improvisation
+# moderation_auto_action_limit_per_cycle: max automatic actions in one polling cycle.
+moderation_auto_action_limit_per_cycle: 1
+# moderation_auto_action_limit_per_day: max successful automatic actions in 24h.
+moderation_auto_action_limit_per_day: 10

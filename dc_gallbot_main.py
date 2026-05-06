@@ -7,8 +7,22 @@ Created on Sun Feb 19 22:40:24 2023
 
 import argparse
 import asyncio
+from pathlib import Path
 from dc_gallbot import Gallbot
 import yaml
+
+DEFAULT_CONFIG_LIST = "conf/gall_conf_list.yaml"
+LOCAL_CONFIG_LIST = "conf/gall_conf_list.local.yaml"
+
+
+def load_config_files(config_list_file=None):
+    if config_list_file is None:
+        local_path = Path(LOCAL_CONFIG_LIST)
+        config_list_file = LOCAL_CONFIG_LIST if local_path.exists() else DEFAULT_CONFIG_LIST
+    with open(config_list_file, 'r', encoding="utf-8") as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+    return config['gall_conf_list'], config_list_file
+
 
 async def run_all(config_files, dry_run=False, once=False, interval_seconds=10, doc_write_only=False, doc_write_use_gallery_nickname=False, doc_write_html_memo=False, doc_write_backend="mobile", doc_write_pc_use_html=False):
     max_cycles = 1 if once else None
@@ -43,11 +57,12 @@ if __name__ == "__main__":
     parser.add_argument("--doc-write-html-memo", action="store_true", help="For doc_write, submit the configured contents as mobile-editor HTML.")
     parser.add_argument("--doc-write-backend", choices=("mobile", "pc"), default="mobile", help="Select the write endpoint family for doc_write.")
     parser.add_argument("--doc-write-pc-use-html", action="store_true", help="For PC doc_write, set the write form use_html field to Y.")
+    parser.add_argument("--config-list", help="Config list yaml. Defaults to conf/gall_conf_list.local.yaml when it exists.")
     args = parser.parse_args()
 
-    with open('conf/gall_conf_list.yaml', 'r', encoding="utf-8") as f:
-        config = yaml.load(f, Loader=yaml.FullLoader)
-    config_files = args.config if args.config else config['gall_conf_list']
+    config_files, config_list_file = load_config_files(args.config_list)
+    config_files = args.config if args.config else config_files
+    print("Config list: {}".format(config_list_file))
 
     if args.live_doc_write_only and args.dry_run:
         print("Starting doc-write-only dry-run event loop")

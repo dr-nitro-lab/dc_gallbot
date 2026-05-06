@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from pathlib import Path
 
@@ -41,6 +42,31 @@ class MirrorCache:
                 """
                 CREATE INDEX IF NOT EXISTS idx_mirror_posts_cleanup
                 ON mirror_posts(source_board_id, status, created_at DESC)
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS mirror_relevance_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_board_id TEXT NOT NULL,
+                    source_doc_id INTEGER NOT NULL,
+                    source_title TEXT NOT NULL DEFAULT '',
+                    target_board_id TEXT NOT NULL,
+                    score INTEGER NOT NULL,
+                    decision TEXT NOT NULL,
+                    filter_applied INTEGER NOT NULL DEFAULT 0,
+                    title_hits TEXT NOT NULL DEFAULT '[]',
+                    contents_hits TEXT NOT NULL DEFAULT '[]',
+                    context_hits TEXT NOT NULL DEFAULT '[]',
+                    negative_hits TEXT NOT NULL DEFAULT '[]',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_mirror_relevance_events_recent
+                ON mirror_relevance_events(source_board_id, created_at DESC)
                 """
             )
 
@@ -100,6 +126,33 @@ class MirrorCache:
                 ),
             )
 
+    def record_relevance(self, source_board_id, source_doc_id, source_title,
+                         target_board_id, result, filter_applied=False):
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO mirror_relevance_events (
+                    source_board_id, source_doc_id, source_title,
+                    target_board_id, score, decision, filter_applied,
+                    title_hits, contents_hits, context_hits, negative_hits
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    source_board_id,
+                    int(source_doc_id),
+                    source_title or "",
+                    target_board_id,
+                    int(result["score"]),
+                    result["decision"],
+                    1 if filter_applied else 0,
+                    json.dumps(result.get("title_hits", []), ensure_ascii=False),
+                    json.dumps(result.get("contents_hits", []), ensure_ascii=False),
+                    json.dumps(result.get("context_hits", []), ensure_ascii=False),
+                    json.dumps(result.get("negative_hits", []), ensure_ascii=False),
+                ),
+            )
+
     def recent_active_by_source(self, source_board_id, limit):
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
@@ -148,6 +201,22 @@ class MirrorCache:
                 WHERE id = ?
                 """.format(title_sql),
                 params,
+            )
+
+    def mark_updated(self, row_id, source_title, target_title):
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE mirror_posts
+                SET source_title = ?,
+                    target_title = ?,
+                    last_seen_at = CURRENT_TIMESTAMP,
+                    target_last_seen_at = CURRENT_TIMESTAMP,
+                    missing_count = 0,
+                    target_missing_count = 0
+                WHERE id = ?
+                """,
+                (source_title or "", target_title or "", int(row_id)),
             )
 
     def mark_missing(self, row_id):

@@ -1,0 +1,52 @@
+moderation_rules:
+  # Bad-user rule.
+  # type: author matches writer display text.
+  # match: exact is safest. contains is broader and should be tested carefully.
+  - id: bad-user-example
+    type: author
+    # target: article, comment, or both.
+    target: both
+    # match: exact or contains.
+    match: exact
+    # values: one or more author strings.
+    values:
+      - 악성닉(123.45)
+    # proposed_action: review, block, or block_delete.
+    proposed_action: review
+    # auto_action: true allows this rule to execute when gallery auto action is enabled.
+    auto_action: false
+    # delete: true sends del_chk=1 with manager action.
+    delete: false
+    # ip_block: true sends avoid_type_chk=1. Keep false unless intentionally needed.
+    ip_block: false
+    # avoid_hour observed values:
+    # "1" = 1 hour, "6" = 6 hours, "24" = 1 day,
+    # "168" = 7 days, "336" = 14 days, "744" = 31 days.
+    avoid_hour: "1"
+    # avoid_reason: observed direct-input reason code is "0".
+    avoid_reason: "0"
+    reason_text: 운영 기준 위반
+
+  # Bad-keyword rule.
+  # Keyword rules usually need trial and review before auto_action is enabled.
+  - id: bad-keyword-example
+    type: keyword
+    target: both
+    # fields for article targets: title, contents.
+    # fields for comment targets: contents.
+    fields:
+      - title
+      - contents
+    match: contains
+    # case_sensitive: false is usually better for mixed Korean/English keywords.
+    case_sensitive: false
+    values:
+      - 금지어예시
+      - 금지어예시2
+    proposed_action: review
+    auto_action: false
+    delete: false
+    ip_block: false
+    avoid_hour: "1"
+    avoid_reason: "0"
+    reason_text: 운영 기준 위반

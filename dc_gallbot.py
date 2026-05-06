@@ -15,10 +15,26 @@ if API_REPO_DIR.is_dir():
 import dc_api
 import asyncio
 import pandas as pd
+import requests
+from types import SimpleNamespace
 from dc_gallbot_cfg import GallbotConfig, get_public_ip
 from dc_board import Board
 from dc_comments import Comments
 from mirror_cache import MirrorCache
+from moderation import ModerationMatcher
+from moderation_action import (
+    ENDPOINT as MODERATION_ACTION_ENDPOINT,
+    PC_HEADERS,
+    load_cookie_rows,
+    import_cookies,
+    manager_marker_probe,
+    quick_conf_probe,
+    prepare_payload,
+    submit_action,
+    response_result,
+)
+from moderation_cache import ModerationCandidateCache
+from relevance import RelevanceScorer
 from time import strftime
 
 class Gallbot():
@@ -57,6 +73,9 @@ class Gallbot():
         self.doc_write_backend = "mobile"
         self.doc_write_pc_use_html = False
         self.mirror_cache = None
+        self.moderation_cache = None
+        self.moderation_matcher = None
+        self.relevance_scorer = None
         self.get_config(file_config)
 
     async def run(self, max_cycles=None, interval_seconds=10):
@@ -90,6 +109,28 @@ class Gallbot():
                         print("done doc_id={}".format(doc_id))
                 else:
                     print("wait!")
+
+            if self.has_moderation_rules():
+                get_contents = True
+                last_id = self.moderation_last_id
+                try:
+                    await self.get_board(self.board_id, get_contents, self.moderation_last_id)
+                except Exception as exc:
+                    print("({}) moderation scan failed: {!r}".format(self.board_id, exc))
+                    if max_cycles is not None:
+                        raise
+                    await asyncio.sleep(interval_seconds)
+                    continue
+                if len(self.board.df_board) > 0:
+                    last_id = self.board.df_board["id"].iloc[0]
+                print("({}) moderation scan ... ".format(self.board_id), end="")
+                for idx, row in self.board.df_board.iterrows():
+                    if row.id <= self.moderation_last_id:
+                        break
+                    await self.record_moderation_candidates(row)
+                self.run_auto_moderation_actions()
+                self.moderation_last_id = last_id
+                print("done last_id={}".format(self.moderation_last_id))
             
             if(self.doc_watch):
                 get_contents=True
@@ -133,13 +174,18 @@ class Gallbot():
                         print("({}) ({}) -> ({}) mirror ... "\
                               .format(self.board_id, row.id,
                                       self.mirror_target_board_id), end="")
-                        title = "[{}] {}".format(self.board_name, row.title)
-                        url = "https://m.dcinside.com/board/{}/{}".format(self.board_id, row.id)
+                        relevance = self.score_mirror_relevance(row)
+                        title = self.mirror_title(row.title)
                         author = row.author
-                        contents = "출처: " + url
+                        contents = self.mirror_contents(row.id)
 
                         if(row.author == self.author):
                             print("(gallbot-generated doc)")
+                        elif self.should_skip_mirror_by_relevance(relevance):
+                            print("skipped relevance score={} decision={}".format(
+                                relevance["score"],
+                                relevance["decision"],
+                            ))
                         elif self.has_mirrored_source(row.id):
                             print("already mirrored")
                         else:
@@ -214,9 +260,166 @@ class Gallbot():
         self.mirror_cleanup_missing_cycles = int(self.cfg.mirror_cleanup_missing_cycles)
         self.mirror_cleanup_scan_pages = int(self.cfg.mirror_cleanup_scan_pages)
         self.mirror_cleanup_target_scan_pages = int(self.cfg.mirror_cleanup_target_scan_pages)
-        if self.mirror or self.mirror_cleanup:
+        self.mirror_sync_update = bool(self.cfg.mirror_sync_update)
+        self.mirror_sync_update_apply = bool(self.cfg.mirror_sync_update_apply)
+        self.mirror_relevance_monitor = bool(self.cfg.mirror_relevance_monitor)
+        self.mirror_relevance_filter = bool(self.cfg.mirror_relevance_filter)
+        self.moderation_monitor = bool(self.cfg.moderation_monitor)
+        self.moderation_scan_comments = bool(self.cfg.moderation_scan_comments)
+        self.moderation_cache_file = self.cfg.moderation_cache_file
+        self.moderation_last_id = 0
+        self.moderation_auto_action = bool(self.cfg.moderation_auto_action)
+        self.moderation_auto_action_cookie_file = self.cfg.moderation_auto_action_cookie_file
+        self.moderation_auto_action_allow_galleries = self.cfg.moderation_auto_action_allow_galleries
+        self.moderation_auto_action_limit_per_cycle = int(self.cfg.moderation_auto_action_limit_per_cycle)
+        self.moderation_auto_action_limit_per_day = int(self.cfg.moderation_auto_action_limit_per_day)
+        if self.mirror or self.mirror_cleanup or self.mirror_relevance_monitor:
             self.mirror_cache = MirrorCache(self.mirror_cache_file)
+        if self.moderation_monitor:
+            self.moderation_cache = ModerationCandidateCache(self.moderation_cache_file)
+            self.moderation_matcher = ModerationMatcher(self.cfg.moderation_rules)
+        if self.mirror_relevance_monitor or self.mirror_relevance_filter:
+            self.relevance_scorer = RelevanceScorer(
+                self.doc_watch_keywords,
+                positive_keywords=self.cfg.mirror_relevance_positive_keywords,
+                negative_keywords=self.cfg.mirror_relevance_negative_keywords,
+                context_keywords=self.cfg.mirror_relevance_context_keywords,
+                title_multiplier=self.cfg.mirror_relevance_title_multiplier,
+                contents_multiplier=self.cfg.mirror_relevance_contents_multiplier,
+                review_score=self.cfg.mirror_relevance_review_score,
+                pass_score=self.cfg.mirror_relevance_pass_score,
+            )
         return
+
+    def has_moderation_rules(self):
+        if self.moderation_matcher is None:
+            return False
+        return self.moderation_matcher.has_rules()
+
+    async def record_moderation_candidates(self, row):
+        if self.moderation_cache is None or self.moderation_matcher is None:
+            return
+        if not self.moderation_matcher.has_rules():
+            return
+        candidates = self.moderation_matcher.match_article(self.board_id, row)
+        if self.moderation_scan_comments and int(row.comment_count) > 0:
+            comments_df = await self.get_comments(self.board_id, int(row.id))
+            for idx, comment_row in comments_df.iterrows():
+                candidates.extend(self.moderation_matcher.match_comment(
+                    self.board_id,
+                    int(row.id),
+                    comment_row,
+                    title=row.title,
+                ))
+        if not candidates:
+            return
+        result = self.moderation_cache.record_candidates(candidates)
+        print("({}) moderation candidates new={} seen={} ".format(
+            self.board_id,
+            result["created"],
+            result["updated"],
+        ), end="")
+
+    def run_auto_moderation_actions(self):
+        if not self.moderation_auto_action or self.moderation_cache is None:
+            return
+        if self.board_id not in self.moderation_auto_action_allow_galleries:
+            print("auto moderation skipped: gallery not allowed ", end="")
+            return
+        used_today = self.moderation_cache.action_count_since(
+            mode="auto",
+            since_sql="datetime('now', '-24 hours')",
+        )
+        remaining_today = self.moderation_auto_action_limit_per_day - used_today
+        if remaining_today <= 0:
+            print("auto moderation skipped: daily limit reached ", end="")
+            return
+        candidates = self.moderation_cache.pending_auto_candidates(
+            board_id=self.board_id,
+            limit=min(self.moderation_auto_action_limit_per_cycle, remaining_today),
+        )
+        if not candidates:
+            return
+        for candidate in candidates:
+            try:
+                self.run_auto_moderation_action(candidate)
+            except Exception as exc:
+                print("auto moderation failed candidate_id={}: {!r} ".format(
+                    candidate["id"],
+                    exc,
+                ), end="")
+
+    def run_auto_moderation_action(self, candidate):
+        if self.dry_run:
+            print("[dry-run] would auto moderate candidate_id={} ".format(candidate["id"]), end="")
+            return
+        session = requests.Session()
+        session.headers.update(PC_HEADERS)
+        import_cookies(session, load_cookie_rows(self.moderation_auto_action_cookie_file))
+        ci_t = session.cookies.get("ci_c", domain=".dcinside.com") or session.cookies.get("ci_c") or ""
+        if not ci_t:
+            raise RuntimeError("ci_c cookie was not found")
+        referer, found_markers, article_status = manager_marker_probe(session, candidate)
+        if article_status == 404:
+            self.moderation_cache.audit_candidate_action(
+                candidate["id"],
+                mode="auto",
+                endpoint=MODERATION_ACTION_ENDPOINT,
+                target_no=candidate["comment_id"] if candidate["target_type"] == "comment" else candidate["article_id"],
+                parent_no=candidate["article_id"] if candidate["target_type"] == "comment" else "",
+                avoid_hour=candidate["avoid_hour"],
+                avoid_reason=candidate["avoid_reason"],
+                reason_text=candidate["reason_text"],
+                del_chk=bool(candidate["del_chk"]),
+                avoid_type_chk=bool(candidate["avoid_type_chk"]),
+                status_code=article_status,
+                result="source_missing",
+                message="article page returned 404 before manager action",
+                response_text="",
+            )
+            self.moderation_cache.mark_candidate_status(candidate["id"], "source_missing")
+            print("auto moderation source_missing candidate_id={} ".format(candidate["id"]), end="")
+            return
+        if not found_markers:
+            raise RuntimeError("manager markers were not found")
+        quick_conf_probe(session, referer, ci_t, candidate, "M")
+        action_args = SimpleNamespace(
+            avoid_hour=candidate["avoid_hour"],
+            avoid_reason=candidate["avoid_reason"],
+            reason_text=candidate["reason_text"],
+            delete=bool(candidate["del_chk"]),
+            ip_block=bool(candidate["avoid_type_chk"]),
+            galltype="M",
+        )
+        payload = prepare_payload(candidate, action_args, ci_t)
+        status_code, response_text = submit_action(session, referer, payload)
+        result, message = response_result(response_text)
+        self.moderation_cache.audit_candidate_action(
+            candidate["id"],
+            mode="auto",
+            endpoint=MODERATION_ACTION_ENDPOINT,
+            target_no=candidate["comment_id"] if candidate["target_type"] == "comment" else candidate["article_id"],
+            parent_no=candidate["article_id"] if candidate["target_type"] == "comment" else "",
+            avoid_hour=candidate["avoid_hour"],
+            avoid_reason=candidate["avoid_reason"],
+            reason_text=candidate["reason_text"],
+            del_chk=bool(candidate["del_chk"]),
+            avoid_type_chk=bool(candidate["avoid_type_chk"]),
+            status_code=status_code,
+            result=result,
+            message=message,
+            response_text=response_text,
+        )
+        if status_code == 200 and result == "success":
+            self.moderation_cache.mark_candidate_status(candidate["id"], "actioned")
+            print("auto moderation actioned candidate_id={} ".format(candidate["id"]), end="")
+        else:
+            self.moderation_cache.mark_candidate_status(candidate["id"], "action_failed")
+            raise RuntimeError("auto action failed status={} result={} message={}".format(
+                status_code,
+                result,
+                message,
+            ))
 
     def get_doc_write_name(self):
         if self.doc_write_use_gallery_nickname:
@@ -257,6 +460,37 @@ class Gallbot():
             self.mirror_target_board_minor,
             self.password,
         )
+
+    def mirror_title(self, source_title):
+        return "[{}] {}".format(self.board_name, source_title)
+
+    def mirror_contents(self, source_doc_id):
+        url = "https://m.dcinside.com/board/{}/{}".format(self.board_id, source_doc_id)
+        return "출처: " + url
+
+    def score_mirror_relevance(self, row):
+        if self.relevance_scorer is None:
+            return None
+        result = self.relevance_scorer.score(row.title, row.contents)
+        if self.mirror_relevance_monitor and self.mirror_cache is not None:
+            self.mirror_cache.record_relevance(
+                self.board_id,
+                int(row.id),
+                row.title,
+                self.mirror_target_board_id,
+                result,
+                filter_applied=self.mirror_relevance_filter,
+            )
+        print("relevance score={} decision={} ".format(
+            result["score"],
+            result["decision"],
+        ), end="")
+        return result
+
+    def should_skip_mirror_by_relevance(self, result):
+        if result is None or not self.mirror_relevance_filter:
+            return False
+        return result["decision"] == "skip"
 
     async def find_existing_mirror_document_id(self, title, num=80):
         async with dc_api.API() as api:
@@ -299,7 +533,8 @@ class Gallbot():
                 min_visible_target_id = min(target_ids)
                 max_visible_target_id = max(target_ids)
                 if target_doc_id in target_ids:
-                    self.mirror_cache.mark_target_seen(row["id"], target_indexes[target_doc_id].title)
+                    row["target_title"] = target_indexes[target_doc_id].title
+                    self.mirror_cache.mark_target_seen(row["id"], row["target_title"])
                 elif target_doc_id < min_visible_target_id:
                     print("({}) mirror target out of scanned range target_doc_id={} scanned={}..{}".format(
                         self.board_id,
@@ -323,7 +558,9 @@ class Gallbot():
                     continue
             source_doc_id = int(row["source_doc_id"])
             if source_doc_id in visible_source_ids:
-                self.mirror_cache.mark_seen(row["id"], visible_source_indexes[source_doc_id].title)
+                source_title = visible_source_indexes[source_doc_id].title
+                self.mirror_cache.mark_seen(row["id"], source_title)
+                await self.sync_mirror_update(row, source_title)
                 continue
             if source_doc_id < min_visible_source_id:
                 print("({}) mirror source out of scanned range source_doc_id={} scanned={}..{}".format(
@@ -362,6 +599,36 @@ class Gallbot():
                 ))
             except Exception as exc:
                 print("remove mirror failed doc_id={}: {!r}".format(row["target_doc_id"], exc))
+
+    async def sync_mirror_update(self, row, source_title):
+        if not self.mirror_sync_update:
+            return
+        expected_title = self.mirror_title(source_title)
+        current_title = row["target_title"] or ""
+        if current_title == expected_title:
+            return
+        if self.dry_run or not self.mirror_sync_update_apply:
+            print("[dry-run] would update mirror doc_id={} title={!r} -> {!r}".format(
+                row["target_doc_id"],
+                current_title,
+                expected_title,
+            ))
+            return
+        try:
+            await self.modify_document(
+                row["target_board_id"],
+                int(row["target_doc_id"]),
+                expected_title,
+                "",
+                row["password"],
+            )
+            self.mirror_cache.mark_updated(row["id"], source_title, expected_title)
+            print("updated mirror doc_id={} title={!r}".format(
+                row["target_doc_id"],
+                expected_title,
+            ))
+        except Exception as exc:
+            print("update mirror failed doc_id={}: {!r}".format(row["target_doc_id"], exc))
 
     def get_author(self, nick):
         ip = get_public_ip()
@@ -452,6 +719,17 @@ class Gallbot():
                 document_id=document_id,
                 password=password,
                 is_minor=is_minor,
+            )
+
+    async def modify_document(self, board_id, document_id, title, contents, password=None):
+        password = self.password if password is None else password
+        async with dc_api.API() as api:
+            return await api.modify_document_pc(
+                board_id=board_id,
+                document_id=document_id,
+                title=title,
+                contents=contents,
+                password=password,
             )
 
     async def get_document(self, doc_id, board_id=None):

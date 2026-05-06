@@ -157,3 +157,6 @@ conf/postrock.yaml
 caches/
 conf/electricguitar.yaml
 conf/lp.yaml
+conf/*.local.yaml
+conf/*cookies*.json
+!conf/*cookies*.example.json

@@ -95,6 +95,44 @@ class GallbotConfig():
         self.mirror_cleanup_missing_cycles = config.get('mirror_cleanup_missing_cycles', 2)
         self.mirror_cleanup_scan_pages = config.get('mirror_cleanup_scan_pages', 3)
         self.mirror_cleanup_target_scan_pages = config.get('mirror_cleanup_target_scan_pages', self.mirror_cleanup_scan_pages)
+        self.mirror_sync_update = config.get('mirror_sync_update', False)
+        self.mirror_sync_update_apply = config.get('mirror_sync_update_apply', False)
+        self.mirror_relevance_monitor = config.get('mirror_relevance_monitor', False)
+        self.mirror_relevance_filter = config.get('mirror_relevance_filter', False)
+        self.mirror_relevance_pass_score = config.get('mirror_relevance_pass_score', 7)
+        self.mirror_relevance_review_score = config.get('mirror_relevance_review_score', 1)
+        self.mirror_relevance_title_multiplier = config.get('mirror_relevance_title_multiplier', 2)
+        self.mirror_relevance_contents_multiplier = config.get('mirror_relevance_contents_multiplier', 1)
+        self.mirror_relevance_positive_keywords = config.get('mirror_relevance_positive_keywords', {})
+        self.mirror_relevance_negative_keywords = config.get('mirror_relevance_negative_keywords', {})
+        self.mirror_relevance_context_keywords = config.get('mirror_relevance_context_keywords', {})
+        self.moderation_monitor = config.get('moderation_monitor', False)
+        self.moderation_scan_comments = config.get('moderation_scan_comments', False)
+        self.moderation_cache_file = config.get('moderation_cache_file', 'caches/moderation_candidates.sqlite')
+        self.moderation_rules_file = config.get('moderation_rules_file', None)
+        self.moderation_rules = config.get('moderation_rules', [])
+        self.moderation_auto_action = config.get('moderation_auto_action', False)
+        self.moderation_auto_action_cookie_file = config.get(
+            'moderation_auto_action_cookie_file',
+            'conf/dcinside_cookies.json',
+        )
+        self.moderation_auto_action_allow_galleries = config.get(
+            'moderation_auto_action_allow_galleries',
+            [],
+        )
+        self.moderation_auto_action_limit_per_cycle = config.get(
+            'moderation_auto_action_limit_per_cycle',
+            1,
+        )
+        self.moderation_auto_action_limit_per_day = config.get(
+            'moderation_auto_action_limit_per_day',
+            10,
+        )
+        if self.moderation_rules_file:
+            rules_path = p.parent / self.moderation_rules_file
+            with open(rules_path, 'r', encoding="utf-8") as f:
+                rules_config = yaml.load(f, Loader=yaml.FullLoader) or {}
+            self.moderation_rules.extend(rules_config.get('moderation_rules', []))
 
         return
     
