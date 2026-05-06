@@ -116,28 +116,38 @@ class MirrorCache:
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def mark_seen(self, row_id):
+    def mark_seen(self, row_id, source_title=None):
+        title_sql = ", source_title = ?" if source_title is not None else ""
+        params = [int(row_id)]
+        if source_title is not None:
+            params = [source_title or "", int(row_id)]
         with self._connect() as conn:
             conn.execute(
                 """
                 UPDATE mirror_posts
                 SET last_seen_at = CURRENT_TIMESTAMP,
                     missing_count = 0
+                    {}
                 WHERE id = ?
-                """,
-                (int(row_id),),
+                """.format(title_sql),
+                params,
             )
 
-    def mark_target_seen(self, row_id):
+    def mark_target_seen(self, row_id, target_title=None):
+        title_sql = ", target_title = ?" if target_title is not None else ""
+        params = [int(row_id)]
+        if target_title is not None:
+            params = [target_title or "", int(row_id)]
         with self._connect() as conn:
             conn.execute(
                 """
                 UPDATE mirror_posts
                 SET target_last_seen_at = CURRENT_TIMESTAMP,
                     target_missing_count = 0
+                    {}
                 WHERE id = ?
-                """,
-                (int(row_id),),
+                """.format(title_sql),
+                params,
             )
 
     def mark_missing(self, row_id):

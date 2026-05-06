@@ -278,26 +278,28 @@ class Gallbot():
         for row in rows:
             target_board_id = row["target_board_id"]
             if target_board_id not in target_ids_by_board:
-                target_ids_by_board[target_board_id] = await self.list_board_document_ids(
+                target_ids_by_board[target_board_id] = await self.list_board_document_indexes(
                     target_board_id,
                     num=max(1, self.mirror_cleanup_target_scan_pages) * 8,
                 )
-        visible_source_ids = await self.list_board_document_ids(
+        visible_source_indexes = await self.list_board_document_indexes(
             self.board_id,
             num=max(1, self.mirror_cleanup_scan_pages) * 8,
         )
+        visible_source_ids = set(visible_source_indexes)
         if not visible_source_ids:
             return
         min_visible_source_id = min(visible_source_ids)
         max_visible_source_id = max(visible_source_ids)
         for row in rows:
-            target_ids = target_ids_by_board.get(row["target_board_id"], set())
+            target_indexes = target_ids_by_board.get(row["target_board_id"], {})
+            target_ids = set(target_indexes)
             if target_ids:
                 target_doc_id = int(row["target_doc_id"])
                 min_visible_target_id = min(target_ids)
                 max_visible_target_id = max(target_ids)
                 if target_doc_id in target_ids:
-                    self.mirror_cache.mark_target_seen(row["id"])
+                    self.mirror_cache.mark_target_seen(row["id"], target_indexes[target_doc_id].title)
                 elif target_doc_id < min_visible_target_id:
                     print("({}) mirror target out of scanned range target_doc_id={} scanned={}..{}".format(
                         self.board_id,
@@ -321,7 +323,7 @@ class Gallbot():
                     continue
             source_doc_id = int(row["source_doc_id"])
             if source_doc_id in visible_source_ids:
-                self.mirror_cache.mark_seen(row["id"])
+                self.mirror_cache.mark_seen(row["id"], visible_source_indexes[source_doc_id].title)
                 continue
             if source_doc_id < min_visible_source_id:
                 print("({}) mirror source out of scanned range source_doc_id={} scanned={}..{}".format(
@@ -404,11 +406,14 @@ class Gallbot():
         return df
 
     async def list_board_document_ids(self, board_id, num):
-        ids = set()
+        return set(await self.list_board_document_indexes(board_id, num))
+
+    async def list_board_document_indexes(self, board_id, num):
+        indexes = {}
         async with dc_api.API() as api:
             async for index in api.board(board_id=board_id, num=num):
-                ids.add(int(index.id))
-        return ids
+                indexes[int(index.id)] = index
+        return indexes
 
 
     async def write_document(self,
