@@ -35,6 +35,8 @@ class MirrorCache:
                 )
                 """
             )
+            self._ensure_column(conn, "target_last_seen_at", "TEXT")
+            self._ensure_column(conn, "target_missing_count", "INTEGER NOT NULL DEFAULT 0")
             conn.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_mirror_posts_cleanup
@@ -42,7 +44,15 @@ class MirrorCache:
                 """
             )
 
-    def has_active_source(self, source_board_id, source_doc_id, target_board_id):
+    def _ensure_column(self, conn, name, definition):
+        columns = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(mirror_posts)").fetchall()
+        }
+        if name not in columns:
+            conn.execute("ALTER TABLE mirror_posts ADD COLUMN {} {}".format(name, definition))
+
+    def has_handled_source(self, source_board_id, source_doc_id, target_board_id):
         with self._connect() as conn:
             row = conn.execute(
                 """
@@ -51,7 +61,7 @@ class MirrorCache:
                 WHERE source_board_id = ?
                   AND source_doc_id = ?
                   AND target_board_id = ?
-                  AND status = 'active'
+                  AND status IN ('active', 'removed', 'removed_external')
                 LIMIT 1
                 """,
                 (source_board_id, int(source_doc_id), target_board_id),
@@ -77,7 +87,9 @@ class MirrorCache:
                     target_is_minor = excluded.target_is_minor,
                     password = excluded.password,
                     last_seen_at = CURRENT_TIMESTAMP,
+                    target_last_seen_at = CURRENT_TIMESTAMP,
                     missing_count = 0,
+                    target_missing_count = 0,
                     status = 'active',
                     removed_at = NULL
                 """,
@@ -116,6 +128,18 @@ class MirrorCache:
                 (int(row_id),),
             )
 
+    def mark_target_seen(self, row_id):
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE mirror_posts
+                SET target_last_seen_at = CURRENT_TIMESTAMP,
+                    target_missing_count = 0
+                WHERE id = ?
+                """,
+                (int(row_id),),
+            )
+
     def mark_missing(self, row_id):
         with self._connect() as conn:
             conn.execute(
@@ -132,12 +156,40 @@ class MirrorCache:
             ).fetchone()
         return int(row[0])
 
+    def mark_target_missing(self, row_id):
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE mirror_posts
+                SET target_missing_count = target_missing_count + 1
+                WHERE id = ?
+                """,
+                (int(row_id),),
+            )
+            row = conn.execute(
+                "SELECT target_missing_count FROM mirror_posts WHERE id = ?",
+                (int(row_id),),
+            ).fetchone()
+        return int(row[0])
+
     def mark_removed(self, row_id):
         with self._connect() as conn:
             conn.execute(
                 """
                 UPDATE mirror_posts
                 SET status = 'removed',
+                    removed_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (int(row_id),),
+            )
+
+    def mark_removed_external(self, row_id):
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE mirror_posts
+                SET status = 'removed_external',
                     removed_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """,

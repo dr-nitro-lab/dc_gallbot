@@ -60,8 +60,13 @@ mirror_cleanup_delete: false
 mirror_cleanup_recent: 10
 mirror_cleanup_missing_cycles: 2
 mirror_cleanup_scan_pages: 3
+mirror_cleanup_target_scan_pages: 3
 ```
 
 Cleanup only reads board lists and does not fetch source documents. Actual
 mirror deletion requires `mirror_cleanup_delete: true`; otherwise cleanup logs
 what it would remove.
+
+If a mirrored target post disappears from the target board list, the cache marks
+it as `removed_external` and the bot will not recreate that mirror for the same
+source post.

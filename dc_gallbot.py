@@ -213,6 +213,7 @@ class Gallbot():
         self.mirror_cleanup_recent = int(self.cfg.mirror_cleanup_recent)
         self.mirror_cleanup_missing_cycles = int(self.cfg.mirror_cleanup_missing_cycles)
         self.mirror_cleanup_scan_pages = int(self.cfg.mirror_cleanup_scan_pages)
+        self.mirror_cleanup_target_scan_pages = int(self.cfg.mirror_cleanup_target_scan_pages)
         if self.mirror or self.mirror_cleanup:
             self.mirror_cache = MirrorCache(self.mirror_cache_file)
         return
@@ -237,7 +238,7 @@ class Gallbot():
     def has_mirrored_source(self, source_doc_id):
         if self.mirror_cache is None:
             return False
-        return self.mirror_cache.has_active_source(
+        return self.mirror_cache.has_handled_source(
             self.board_id,
             int(source_doc_id),
             self.mirror_target_board_id,
@@ -273,6 +274,14 @@ class Gallbot():
         )
         if not rows:
             return
+        target_ids_by_board = {}
+        for row in rows:
+            target_board_id = row["target_board_id"]
+            if target_board_id not in target_ids_by_board:
+                target_ids_by_board[target_board_id] = await self.list_board_document_ids(
+                    target_board_id,
+                    num=max(1, self.mirror_cleanup_target_scan_pages) * 8,
+                )
         visible_source_ids = await self.list_board_document_ids(
             self.board_id,
             num=max(1, self.mirror_cleanup_scan_pages) * 8,
@@ -282,6 +291,34 @@ class Gallbot():
         min_visible_source_id = min(visible_source_ids)
         max_visible_source_id = max(visible_source_ids)
         for row in rows:
+            target_ids = target_ids_by_board.get(row["target_board_id"], set())
+            if target_ids:
+                target_doc_id = int(row["target_doc_id"])
+                min_visible_target_id = min(target_ids)
+                max_visible_target_id = max(target_ids)
+                if target_doc_id in target_ids:
+                    self.mirror_cache.mark_target_seen(row["id"])
+                elif target_doc_id < min_visible_target_id:
+                    print("({}) mirror target out of scanned range target_doc_id={} scanned={}..{}".format(
+                        self.board_id,
+                        target_doc_id,
+                        min_visible_target_id,
+                        max_visible_target_id,
+                    ))
+                else:
+                    target_missing_count = self.mirror_cache.mark_target_missing(row["id"])
+                    print("({}) mirror target missing target_doc_id={} missing_count={}".format(
+                        self.board_id,
+                        target_doc_id,
+                        target_missing_count,
+                    ))
+                    if target_missing_count >= self.mirror_cleanup_missing_cycles:
+                        self.mirror_cache.mark_removed_external(row["id"])
+                        print("({}) mirror target marked removed_external target_doc_id={}".format(
+                            self.board_id,
+                            target_doc_id,
+                        ))
+                    continue
             source_doc_id = int(row["source_doc_id"])
             if source_doc_id in visible_source_ids:
                 self.mirror_cache.mark_seen(row["id"])

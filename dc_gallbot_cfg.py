@@ -94,6 +94,7 @@ class GallbotConfig():
         self.mirror_cleanup_recent = config.get('mirror_cleanup_recent', 10)
         self.mirror_cleanup_missing_cycles = config.get('mirror_cleanup_missing_cycles', 2)
         self.mirror_cleanup_scan_pages = config.get('mirror_cleanup_scan_pages', 3)
+        self.mirror_cleanup_target_scan_pages = config.get('mirror_cleanup_target_scan_pages', self.mirror_cleanup_scan_pages)
 
         return
     
