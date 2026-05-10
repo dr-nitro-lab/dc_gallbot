@@ -39,16 +39,3 @@ class Comments():
         if(len(self.findAuthor(author)) == 0):
             return False
         return True
-            
-    
-if __name__ == "__main__":
-    comments = Comments('jazz', 80051)
-    print(comments.get_comments())
-    comments.read_csv('test/jazz.80051.comments.csv')
-    print(comments.get_comments())
-    df_comments = comments.get_comments()
-    print(df_comments)
-    comments.set_comments(df_comments)
-    print(comments.get_comments())
-    print(comments.findAuthor("ㅇㅇ(121.167)")['author'])
-    print(comments.findContents(['쇼팽', '말러', '재즈'])['contents'])
