@@ -130,6 +130,15 @@ def print_rows(rows, visible_by_board):
             print("  field: {}".format(row["matched_field"]))
         print("  matched: {}".format(compact(row["matched_text"], limit=80)))
         print("  author: {}".format(compact(row["author"], limit=80)))
+        author_parts = []
+        if "author_name" in row.keys() and row["author_name"]:
+            author_parts.append("name={}".format(compact(row["author_name"], limit=60)))
+        if "author_ip" in row.keys() and row["author_ip"]:
+            author_parts.append("ip={}".format(compact(row["author_ip"], limit=20)))
+        if "author_id" in row.keys() and row["author_id"]:
+            author_parts.append("id={}".format(compact(row["author_id"], limit=60)))
+        if author_parts:
+            print("  author_parts: {}".format(" ".join(author_parts)))
         if row["title"]:
             print("  title: {}".format(compact(row["title"], limit=120)))
         if row["excerpt"]:

@@ -23,6 +23,9 @@ class ModerationCandidateCache:
                     article_id INTEGER NOT NULL,
                     comment_id INTEGER NOT NULL DEFAULT 0,
                     author TEXT NOT NULL DEFAULT '',
+                    author_name TEXT NOT NULL DEFAULT '',
+                    author_ip TEXT NOT NULL DEFAULT '',
+                    author_id TEXT NOT NULL DEFAULT '',
                     title TEXT NOT NULL DEFAULT '',
                     excerpt TEXT NOT NULL DEFAULT '',
                     rule_id TEXT NOT NULL,
@@ -47,6 +50,9 @@ class ModerationCandidateCache:
                 """
             )
             self._ensure_column(conn, "matched_field", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column(conn, "author_name", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column(conn, "author_ip", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column(conn, "author_id", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(conn, "auto_action", "INTEGER NOT NULL DEFAULT 0")
             self._ensure_column(conn, "avoid_hour", "TEXT NOT NULL DEFAULT '1'")
             self._ensure_column(conn, "avoid_reason", "TEXT NOT NULL DEFAULT '0'")
@@ -75,6 +81,9 @@ class ModerationCandidateCache:
             int(candidate["article_id"]),
             comment_id,
             candidate.get("author") or "",
+            candidate.get("author_name") or "",
+            candidate.get("author_ip") or "",
+            candidate.get("author_id") or "",
             candidate.get("title") or "",
             candidate.get("excerpt") or "",
             candidate["rule_id"],
@@ -115,18 +124,22 @@ class ModerationCandidateCache:
                 """
                 INSERT INTO moderation_candidates (
                     board_id, target_type, article_id, comment_id,
-                    author, title, excerpt, rule_id, rule_type,
+                    author, author_name, author_ip, author_id,
+                    title, excerpt, rule_id, rule_type,
                     matched_field, matched_text, proposed_action,
                     auto_action, avoid_hour, avoid_reason, reason_text,
                     del_chk, avoid_type_chk
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(
                     board_id, target_type, article_id, comment_id,
                     rule_id, matched_text
                 )
                 DO UPDATE SET
                     author = excluded.author,
+                    author_name = excluded.author_name,
+                    author_ip = excluded.author_ip,
+                    author_id = excluded.author_id,
                     title = excluded.title,
                     excerpt = excluded.excerpt,
                     matched_field = excluded.matched_field,

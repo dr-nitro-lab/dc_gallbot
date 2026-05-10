@@ -9,7 +9,10 @@ import pandas as pd
 
 class Comments():
     def __init__(self, board_id="", doc_id=0):
-        self.cols = ['id', 'author', 'time', 'contents', 'is_reply']
+        self.cols = [
+            'id', 'author', 'author_name', 'author_ip', 'author_id',
+            'time', 'contents', 'is_reply',
+        ]
         self.board_id = board_id
         self.doc_id = doc_id
         self.df_comments = pd.DataFrame([], columns=self.cols)

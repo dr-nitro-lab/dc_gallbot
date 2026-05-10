@@ -18,7 +18,7 @@ import pandas as pd
 import requests
 from types import SimpleNamespace
 from gallkeeper_cfg import GallKeeperConfig, get_public_ip
-from dc_board import Board
+from dc_board import Board, split_author_display
 from dc_comments import Comments
 from mirror_cache import MirrorCache
 from moderation import ModerationMatcher
@@ -644,7 +644,10 @@ class GallKeeper():
     async def get_board(self, board_id=None, get_contents=False, last_id=0):
         board_id = self.board_id if board_id is None else board_id
         print("({}) getting board data ... ".format(board_id), end="")
-        cols = ['id', 'author', 'time', 'title', 'comment_count', 'contents']
+        cols = [
+            'id', 'author', 'author_name', 'author_ip', 'author_id',
+            'time', 'title', 'comment_count', 'contents',
+        ]
         rows = []
         async with dc_api.API() as api:
             i_post = 0
@@ -658,12 +661,20 @@ class GallKeeper():
                         print("skipped")
                         continue
                     index.author = doc.author
+                    author_id = doc.author_id
                     contents = doc.contents
                     print("done")
                 else:
+                    author_id = getattr(index, "author_id", "")
                     contents = ""
-                rows.append([int(index.id), index.author, index.time,
-                             index.title, int(index.comment_count), contents])
+                author_name, author_ip, author_id = split_author_display(
+                    index.author,
+                    author_id,
+                )
+                rows.append([
+                    int(index.id), index.author, author_name, author_ip, author_id,
+                    index.time, index.title, int(index.comment_count), contents,
+                ])
                 i_post = i_post + 1
                 if(i_post == 8):
                     df = pd.DataFrame(rows, columns=cols)
@@ -757,14 +768,23 @@ class GallKeeper():
     
     async def get_comments(self, board_id=None, doc_id=-1):
         board_id    = self.board_id    if board_id    is None else board_id
-        cols = ['id', 'author', 'time', 'contents', 'is_reply']
+        cols = [
+            'id', 'author', 'author_name', 'author_ip', 'author_id',
+            'time', 'contents', 'is_reply',
+        ]
         rows = []
         if doc_id < 0:
             return pd.DataFrame(rows, columns=cols)
         async with dc_api.API() as api:
             async for comm in api.comments(board_id=board_id, document_id=doc_id):
-                rows.append([int(comm.id), comm.author, comm.time,
-                             comm.contents, comm.is_reply])
+                author_name, author_ip, author_id = split_author_display(
+                    comm.author,
+                    comm.author_id,
+                )
+                rows.append([
+                    int(comm.id), comm.author, author_name, author_ip, author_id,
+                    comm.time, comm.contents, comm.is_reply,
+                ])
         df = pd.DataFrame(rows, columns=cols)
         if (self.use_cache):
             df.to_csv('caches/'+board_id+".comments.csv", index=False)

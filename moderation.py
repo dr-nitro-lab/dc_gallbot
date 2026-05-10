@@ -10,12 +10,18 @@ class ModerationMatcher:
         title = self._text(self._value(row, "title", ""))
         contents = self._text(self._value(row, "contents", ""))
         author = self._text(self._value(row, "author", ""))
+        author_name = self._text(self._value(row, "author_name", ""))
+        author_ip = self._text(self._value(row, "author_ip", ""))
+        author_id = self._text(self._value(row, "author_id", ""))
         candidates = []
         for rule in self.rules:
             if not self._target_matches(rule, "article"):
                 continue
             fields = {
                 "author": author,
+                "author_name": author_name,
+                "author_ip": author_ip,
+                "author_id": author_id,
                 "title": title,
                 "contents": contents,
             }
@@ -26,6 +32,9 @@ class ModerationMatcher:
                     "article_id": article_id,
                     "comment_id": 0,
                     "author": author,
+                    "author_name": author_name,
+                    "author_ip": author_ip,
+                    "author_id": author_id,
                     "title": title,
                     "excerpt": self._excerpt_for_match(fields[matched_field], matched_text),
                     "rule_id": rule["id"],
@@ -46,12 +55,18 @@ class ModerationMatcher:
         comment_id = int(self._value(row, "id", 0))
         contents = self._text(self._value(row, "contents", ""))
         author = self._text(self._value(row, "author", ""))
+        author_name = self._text(self._value(row, "author_name", ""))
+        author_ip = self._text(self._value(row, "author_ip", ""))
+        author_id = self._text(self._value(row, "author_id", ""))
         candidates = []
         for rule in self.rules:
             if not self._target_matches(rule, "comment"):
                 continue
             fields = {
                 "author": author,
+                "author_name": author_name,
+                "author_ip": author_ip,
+                "author_id": author_id,
                 "contents": contents,
             }
             for matched_field, matched_text in self._rule_matches(rule, fields):
@@ -61,6 +76,9 @@ class ModerationMatcher:
                     "article_id": int(article_id),
                     "comment_id": comment_id,
                     "author": author,
+                    "author_name": author_name,
+                    "author_ip": author_ip,
+                    "author_id": author_id,
                     "title": title or "",
                     "excerpt": self._excerpt_for_match(fields[matched_field], matched_text),
                     "rule_id": rule["id"],

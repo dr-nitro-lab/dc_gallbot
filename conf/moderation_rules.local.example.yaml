@@ -1,6 +1,8 @@
 moderation_rules:
   # Bad-user rule.
-  # type: author matches writer display text.
+  # type: author matches writer identity fields.
+  # fields: author, author_name, author_ip, author_id.
+  # author keeps the original display text. author_ip is only parsed for anonymous users.
   # match: exact is safest. contains is broader and should be tested carefully.
   - id: bad-user-example
     type: author
@@ -32,8 +34,8 @@ moderation_rules:
   - id: bad-keyword-example
     type: keyword
     target: both
-    # fields for article targets: title, contents.
-    # fields for comment targets: contents.
+    # fields for article targets: title, contents, author, author_name, author_ip, author_id.
+    # fields for comment targets: contents, author, author_name, author_ip, author_id.
     fields:
       - title
       - contents
