@@ -72,7 +72,7 @@ pip install git+https://github.com/dr-nitro-lab/dcinside-python3-api.git@master
 - `conf/moderation_rules.local.yaml`: 로컬 운영 보조 규칙
 - `.scratch/dcinside-session/cookies.json`: 브라우저에서 내보낸 로컬 쿠키 파일
 
-`dc_gallbot_main.py`는 `conf/gall_conf_list.local.yaml`이 있으면 이 파일을 먼저 사용하고, 없으면 `conf/gall_conf_list.yaml`을 사용한다.
+`gallkeeper_main.py`는 `conf/gall_conf_list.local.yaml`이 있으면 이 파일을 먼저 사용하고, 없으면 `conf/gall_conf_list.yaml`을 사용한다.
 
 키워드 기반 규칙은 시행착오가 필요한 영역이므로 기본값은 `review`와 `auto_action: false`로 둔다. 자동 실행은 충분히 검증된 작성자 exact rule 또는 매우 확실한 금지 문구에만 제한적으로 켠다.
 
@@ -104,13 +104,13 @@ pip install git+https://github.com/dr-nitro-lab/dcinside-python3-api.git@master
 쓰기 없이 한 번만 확인하려면:
 
 ```bash
-python dc_gallbot_main.py --dry-run --once --interval 0
+python3 gallkeeper_main.py --dry-run --once --interval 0
 ```
 
 설정 파일을 지정하려면:
 
 ```bash
-python dc_gallbot_main.py --config default.yaml --dry-run --once
+python3 gallkeeper_main.py --config default.yaml --dry-run --once
 ```
 
 실제 운영에서는 로컬 설정 파일을 사용한다. 공개 저장소에는 운영 중인 갤러리 설정이나 인증 정보를 포함하지 않는다.

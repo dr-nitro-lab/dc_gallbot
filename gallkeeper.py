@@ -17,7 +17,7 @@ import asyncio
 import pandas as pd
 import requests
 from types import SimpleNamespace
-from dc_gallbot_cfg import GallbotConfig, get_public_ip
+from gallkeeper_cfg import GallKeeperConfig, get_public_ip
 from dc_board import Board
 from dc_comments import Comments
 from mirror_cache import MirrorCache
@@ -37,7 +37,7 @@ from moderation_cache import ModerationCandidateCache
 from relevance import RelevanceScorer
 from time import strftime
 
-class Gallbot():
+class GallKeeper():
     """
     https://gall.dcinside.com/mgallery/board/view/?id=improvisation&no=1084
 
@@ -61,7 +61,7 @@ class Gallbot():
         * 예: (재즈갤|80090) 재즈피아노 입문자, 마이너 스케일 관련 질문
         3. [x] 비밀번호는 저장된 설정 파일을 이용
         4. [x] 읽기 후 가장 최근 작성된 글 번호 저장
-        5. [ ] https://github.com/dr-nitro-lab/dc_gallbot/issues/1 원문 추출 시 기본으로 생성되는 코드 제거
+        5. [ ] https://github.com/dr-nitro-lab/dc-gallkeeper/issues/1 원문 추출 시 기본으로 생성되는 코드 제거
         6. [ ] 봇의 게시글은 제외
     
     """
@@ -154,7 +154,7 @@ class Gallbot():
                         print("({}) ({}) comment ... "\
                               .format(self.board_id, row.id), end="")
                         if(row.author == self.author):
-                            print("(gallbot-generated doc)")
+                            print("(gallkeeper-generated doc)")
                         else:
                             await self.get_comments(self.board_id, row.id)
                             if(self.comments.isAuthorExists(self.author)):
@@ -180,7 +180,7 @@ class Gallbot():
                         contents = self.mirror_contents(row.id)
 
                         if(row.author == self.author):
-                            print("(gallbot-generated doc)")
+                            print("(gallkeeper-generated doc)")
                         elif self.should_skip_mirror_by_relevance(relevance):
                             print("skipped relevance score={} decision={}".format(
                                 relevance["score"],
@@ -215,7 +215,12 @@ class Gallbot():
                 print("({}) last watched doc id: {}".format(self.board_id,
                                                             self.doc_watch_last_id))
             if self.mirror_cleanup:
-                await self.cleanup_mirrors()
+                try:
+                    await self.cleanup_mirrors()
+                except Exception as exc:
+                    print("({}) mirror cleanup failed: {!r}".format(self.board_id, exc))
+                    if max_cycles is not None:
+                        raise
             
             if max_cycles is not None and cycle >= max_cycles:
                 break
@@ -224,7 +229,7 @@ class Gallbot():
             await asyncio.sleep(interval_seconds)
 
     def get_config(self, file_config):
-        self.cfg = GallbotConfig(file_config)
+        self.cfg = GallKeeperConfig(file_config)
 
         self.repeat = self.cfg.repeat
         self.use_cache = self.cfg.use_cache
@@ -767,7 +772,7 @@ class Gallbot():
         return df
 
 if __name__ == "__main__":
-    gallbot = Gallbot("conf/default.yaml")
+    gallkeeper = GallKeeper("conf/default.yaml")
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:  # 'RuntimeError: There is no current event loop...'
@@ -775,7 +780,7 @@ if __name__ == "__main__":
     
     if loop and loop.is_running():
         print('Async event loop already running. Adding coroutine to the event loop.')
-        tsk = loop.create_task(gallbot.run())
+        tsk = loop.create_task(gallkeeper.run())
         # ^-- https://docs.python.org/3/library/asyncio-task.html#task-object
         # Optionally, a callback function can be executed when the coroutine completes
         tsk.add_done_callback(
@@ -783,4 +788,4 @@ if __name__ == "__main__":
         # loop.close()
     else:
         print('Starting new event loop')
-        asyncio.run(gallbot.run())
+        asyncio.run(gallkeeper.run())

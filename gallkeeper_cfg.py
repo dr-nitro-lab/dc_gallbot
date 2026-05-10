@@ -49,7 +49,7 @@ def get_public_ip(urls=PUBLIC_IP_URLS, timeout=3):
     raise RuntimeError("Could not get public IP from configured providers: {}".format("; ".join(errors)))
 
 
-class GallbotConfig():
+class GallKeeperConfig():
     def __init__(self, file_config):
         self.get_config(file_config)
     
@@ -143,5 +143,5 @@ class GallbotConfig():
         return author
     
 if __name__ == "__main__":
-    config = GallbotConfig("conf/default.yaml")
+    config = GallKeeperConfig("conf/default.yaml")
     doc = config.doc_contents

@@ -8,7 +8,7 @@ Created on Sun Feb 19 22:40:24 2023
 import argparse
 import asyncio
 from pathlib import Path
-from dc_gallbot import Gallbot
+from gallkeeper import GallKeeper
 import yaml
 
 DEFAULT_CONFIG_LIST = "conf/gall_conf_list.yaml"
@@ -26,30 +26,30 @@ def load_config_files(config_list_file=None):
 
 async def run_all(config_files, dry_run=False, once=False, interval_seconds=10, doc_write_only=False, doc_write_use_gallery_nickname=False, doc_write_html_memo=False, doc_write_backend="mobile", doc_write_pc_use_html=False):
     max_cycles = 1 if once else None
-    list_gallbot = [Gallbot('conf/' + conf, dry_run=dry_run) for conf in config_files]
+    gallkeepers = [GallKeeper('conf/' + conf, dry_run=dry_run) for conf in config_files]
     if doc_write_only:
-        for gallbot in list_gallbot:
-            gallbot.doc_watch = False
-            gallbot.comment_write = False
-            gallbot.mirror = False
+        for gallkeeper in gallkeepers:
+            gallkeeper.doc_watch = False
+            gallkeeper.comment_write = False
+            gallkeeper.mirror = False
     if doc_write_use_gallery_nickname:
-        for gallbot in list_gallbot:
-            gallbot.doc_write_use_gallery_nickname = True
+        for gallkeeper in gallkeepers:
+            gallkeeper.doc_write_use_gallery_nickname = True
     if doc_write_html_memo:
-        for gallbot in list_gallbot:
-            gallbot.doc_write_html_memo = True
-    for gallbot in list_gallbot:
-        gallbot.doc_write_backend = doc_write_backend
-        gallbot.doc_write_pc_use_html = doc_write_pc_use_html
+        for gallkeeper in gallkeepers:
+            gallkeeper.doc_write_html_memo = True
+    for gallkeeper in gallkeepers:
+        gallkeeper.doc_write_backend = doc_write_backend
+        gallkeeper.doc_write_pc_use_html = doc_write_pc_use_html
     await asyncio.gather(*[
-        gallbot.run(max_cycles=max_cycles, interval_seconds=interval_seconds)
-        for gallbot in list_gallbot
+        gallkeeper.run(max_cycles=max_cycles, interval_seconds=interval_seconds)
+        for gallkeeper in gallkeepers
     ])
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run configured DCInside gallbots.")
+    parser = argparse.ArgumentParser(description="Run configured DCInside GallKeeper bots.")
     parser.add_argument("--dry-run", action="store_true", help="Read and decide only; do not write posts or comments.")
-    parser.add_argument("--once", action="store_true", help="Run one polling cycle per configured gallbot.")
+    parser.add_argument("--once", action="store_true", help="Run one polling cycle per configured GallKeeper bot.")
     parser.add_argument("--interval", type=float, default=10, help="Polling interval in seconds.")
     parser.add_argument("--config", action="append", help="Run only the named config file under conf/. Can be passed more than once.")
     parser.add_argument("--live-doc-write-only", action="store_true", help="Live mode safety switch: only doc_write is allowed; watchers, comments, and mirrors are disabled.")
