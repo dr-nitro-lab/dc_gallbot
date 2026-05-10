@@ -82,7 +82,7 @@ def parse_args():
 def load_cookie_rows(path):
     text = Path(path).read_text(encoding="utf-8").strip()
     if not text:
-        raise SystemExit("cookie file is empty: {}".format(path))
+        raise ValueError("cookie file is empty: {}".format(path))
     if text.startswith("[") or text.startswith("{"):
         data = json.loads(text)
         if isinstance(data, dict):
@@ -94,7 +94,7 @@ def load_cookie_rows(path):
                     for name, value in data.items()
                 ]
         if not isinstance(data, list):
-            raise SystemExit("JSON cookie file must be a list, {cookies: []}, or name/value object")
+            raise ValueError("JSON cookie file must be a list, {cookies: []}, or name/value object")
         return [dict(row) for row in data]
 
     rows = []
@@ -114,7 +114,7 @@ def load_cookie_rows(path):
             "value": value,
         })
     if not rows:
-        raise SystemExit("No cookies found. Use JSON export or Netscape cookies.txt format.")
+        raise ValueError("No cookies found. Use JSON export or Netscape cookies.txt format.")
     return rows
 
 
@@ -278,7 +278,10 @@ def main():
 
     session = requests.Session()
     session.headers.update(PC_HEADERS)
-    names = import_cookies(session, load_cookie_rows(cookie_path))
+    try:
+        names = import_cookies(session, load_cookie_rows(cookie_path))
+    except ValueError as exc:
+        raise SystemExit(str(exc))
     ci_t = session.cookies.get("ci_c", domain=".dcinside.com") or session.cookies.get("ci_c") or ""
 
     print_candidate(candidate)
